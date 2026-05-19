@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a1a1a">
+  <title>Pi Checker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>&pi; Checker</h1>
+    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">&#x1F319;</button>
+  </header>
+
+  <main>
+    <section class="controls">
+      <div class="mode-selector" role="radiogroup" aria-label="Mode">
+        <label class="mode-option">
+          <input type="radio" name="mode" value="normal" checked>
+          <span>Normal</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="competitive">
+          <span>Competitive</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="mode" value="flawless">
+          <span>Flawless</span>
+        </label>
+      </div>
+
+      <div class="auto-check">
+        <label for="auto-seconds">
+          Auto-check delay: <strong><span id="auto-seconds-value">5</span>s</strong>
+        </label>
+        <input type="range" id="auto-seconds" min="0" max="30" value="5" step="1">
+        <small id="mode-hint" class="hint"></small>
+      </div>
+    </section>
+
+    <section class="display-area" aria-live="polite">
+      <div id="pi-display" class="pi-display">
+        <span class="prefix">3.</span><span id="user-digits"></span><span class="cursor" id="cursor">|</span>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div><div class="stat-label">Correct</div><div class="stat-value" id="stat-correct">0</div></div>
+      <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">0</div></div>
+      <div><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">0</div></div>
+      <div><div class="stat-label">Time</div><div class="stat-value" id="stat-time">0:00</div></div>
+    </section>
+
+    <section class="keypad" role="group" aria-label="Numeric keypad">
+      <button class="key" data-digit="1">1</button>
+      <button class="key" data-digit="2">2</button>
+      <button class="key" data-digit="3">3</button>
+      <button class="key" data-digit="4">4</button>
+      <button class="key" data-digit="5">5</button>
+      <button class="key" data-digit="6">6</button>
+      <button class="key" data-digit="7">7</button>
+      <button class="key" data-digit="8">8</button>
+      <button class="key" data-digit="9">9</button>
+      <button class="key key-check" id="check-btn" aria-label="Check">&#x2713;</button>
+      <button class="key" data-digit="0">0</button>
+      <button class="key key-back" id="back-btn" aria-label="Backspace">&#x232B;</button>
+    </section>
+
+    <section class="actions">
+      <button id="reset-btn" type="button">Reset</button>
+    </section>
+
+    <footer class="foot">
+      Type or tap. <kbd>0-9</kbd>, <kbd>Backspace</kbd>, <kbd>Enter</kbd> to check.
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
