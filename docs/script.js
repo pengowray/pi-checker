@@ -125,9 +125,11 @@ const state = {
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
-  startAtDigit: 0,
   compTimerHidden: false,
 };
+
+// In-memory only (not persisted): the last "Skip N" value the user entered.
+let lastSkipAmount = 10;
 
 // ---- DOM refs ----
 const userDigitsEl = document.getElementById('user-digits');
@@ -157,8 +159,12 @@ const keypadHintEl = document.getElementById('keypad-hint');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
-const startAtInput = document.getElementById('start-at');
 const resetBtns = document.querySelectorAll('.setting-reset');
+const pastedTile = document.getElementById('stat-pasted-tile');
+const skipModal = document.getElementById('skip-modal');
+const skipOneBtn = document.getElementById('skip-one');
+const skipConfirmBtn = document.getElementById('skip-confirm');
+const skipCountInput = document.getElementById('skip-count');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -220,13 +226,25 @@ practiceDisplayInputs.forEach(input => {
   });
 });
 
-// ---- Start at digit (session-level setting; not persisted across page loads) ----
-function applyStartAtDigit() {
-  const n = Math.min(state.startAtDigit, state.digits.length);
-  for (let i = 0; i < n; i++) {
+// ---- Paste next digit(s) ----
+// Practice: works any time. Competitive/Hardcore: only before the clock starts.
+function canPasteSkip() {
+  if (isInputLocked()) return false;
+  if (state.entries.length >= state.digits.length) return false;
+  if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime !== null) return false;
+  return true;
+}
+
+function pasteSkipDigits(n) {
+  if (!canPasteSkip()) return 0;
+  const remaining = state.digits.length - state.entries.length;
+  const count = Math.min(Math.max(0, n | 0), remaining);
+  if (count === 0) return 0;
+  for (let i = 0; i < count; i++) {
+    const t = state.startTime === null ? null : (performance.now() - state.startTime);
     state.entries.push({
-      char: state.digits[i],
-      t: null,
+      char: state.digits[state.entries.length],
+      t: t,
       pasted: true,
       checked: true,
       status: 'pending',
@@ -235,44 +253,11 @@ function applyStartAtDigit() {
     });
   }
   computeStatuses();
+  render();
+  return count;
 }
 
-startAtInput.addEventListener('change', () => {
-  const raw = parseInt(startAtInput.value, 10);
-  const newValue = (isNaN(raw) || raw < 0) ? 0 : raw;
-  if (newValue === state.startAtDigit) {
-    startAtInput.value = newValue;
-    return;
-  }
-  state.startAtDigit = newValue;
-  startAtInput.value = newValue;
-  updateResetVisibility();
-  // Re-seed the session with the new start-at value
-  clearSession();
-  applyStartAtDigit();
-  render();
-});
-
-// ---- Paste next digit (V key) ----
-// Practice: works any time. Competitive/Hardcore: only before the clock starts.
-function pasteNextDigit() {
-  if (isInputLocked()) return;
-  if (state.entries.length >= state.digits.length) return;
-  if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime !== null) return;
-  const d = state.digits[state.entries.length];
-  const t = state.startTime === null ? null : (performance.now() - state.startTime);
-  state.entries.push({
-    char: d,
-    t: t,
-    pasted: true,
-    checked: true,
-    status: 'pending',
-    expected: null,
-    skippedBefore: [],
-  });
-  computeStatuses();
-  render();
-}
+function pasteNextDigit() { pasteSkipDigits(1); }
 
 // ---- Sequence selection ----
 function applySequence(id) {
@@ -1031,7 +1016,6 @@ function reset() {
   const checkedRadio = document.querySelector('input[name="mode"]:checked');
   if (checkedRadio) state.mode = checkedRadio.value;
   applyModeDefaults();
-  applyStartAtDigit();
   render();
 }
 
@@ -1081,6 +1065,14 @@ document.addEventListener('keydown', (e) => {
   if (!settingsModal.hidden) {
     if (e.key === 'Escape') {
       closeSettings();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (!skipModal.hidden) {
+    if (e.key === 'Escape') {
+      closeSkipModal();
       e.preventDefault();
     }
     return;
@@ -1152,11 +1144,6 @@ resetBtns.forEach(btn => {
       localStorage.setItem(STORAGE_KEYS.practiceDisplay, DEFAULT_PRACTICE_DISPLAY);
       updateResetVisibility();
       render();
-    } else if (target === 'start-at') {
-      // Restore default; don't touch the current session
-      state.startAtDigit = 0;
-      startAtInput.value = 0;
-      updateResetVisibility();
     }
   });
 });
@@ -1170,7 +1157,6 @@ function updateResetVisibility() {
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
     else if (target === 'practice-display') isDefault = state.practiceDisplay === DEFAULT_PRACTICE_DISPLAY;
-    else if (target === 'start-at') isDefault = state.startAtDigit === 0;
     btn.hidden = isDefault;
   });
 }
@@ -1188,6 +1174,54 @@ settingsToggle.addEventListener('click', openSettings);
 modeBadge.addEventListener('click', openSettings);
 settingsModal.addEventListener('click', (e) => {
   if (e.target && e.target.hasAttribute('data-close')) closeSettings();
+});
+
+// ---- Skip-digits modal ----
+function openSkipModal() {
+  if (!canPasteSkip()) return;
+  skipCountInput.value = lastSkipAmount;
+  skipModal.hidden = false;
+  skipModal.setAttribute('aria-hidden', 'false');
+  setTimeout(() => { skipCountInput.focus(); skipCountInput.select(); }, 0);
+}
+
+function closeSkipModal() {
+  skipModal.hidden = true;
+  skipModal.setAttribute('aria-hidden', 'true');
+}
+
+function confirmSkipN() {
+  const raw = parseInt(skipCountInput.value, 10);
+  if (isNaN(raw) || raw < 1) return;
+  lastSkipAmount = raw;
+  pasteSkipDigits(raw);
+  closeSkipModal();
+}
+
+pastedTile.addEventListener('click', openSkipModal);
+pastedTile.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    openSkipModal();
+  }
+});
+
+skipOneBtn.addEventListener('click', () => {
+  pasteSkipDigits(1);
+  closeSkipModal();
+});
+
+skipConfirmBtn.addEventListener('click', confirmSkipN);
+
+skipCountInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    confirmSkipN();
+  }
+});
+
+skipModal.addEventListener('click', (e) => {
+  if (e.target && e.target.hasAttribute('data-close')) closeSkipModal();
 });
 
 // ---- Async load of the long pi sequence ----

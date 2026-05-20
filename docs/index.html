@@ -39,7 +39,7 @@
       <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">0</div></div>
       <div><div class="stat-label">Erased</div><div class="stat-value" id="stat-erased">0</div></div>
       <div><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">0</div></div>
-      <div><div class="stat-label">Pasted</div><div class="stat-value" id="stat-pasted">0</div></div>
+      <div id="stat-pasted-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Pasted digits — click to skip ahead"><div class="stat-label">Pasted</div><div class="stat-value" id="stat-pasted">0</div></div>
     </section>
 
     <div class="keypad-hint" id="keypad-hint">Enter digit 1 of &pi;:</div>
@@ -114,16 +114,6 @@
             <option value="pi-binary">&pi; in binary</option>
             <option value="pi-hex">&pi; in hex</option>
           </select>
-        </div>
-
-        <div class="setting">
-          <div class="setting-label">
-            <label for="start-at">Start at digit</label>
-            <button type="button" class="setting-reset" data-reset="start-at" hidden aria-label="Reset start-at to default">&#x2715;</button>
-          </div>
-          <div class="setting-inline">
-            <input type="number" id="start-at" min="0" value="0">
-          </div>
         </div>
 
         <div class="setting">
@@ -217,6 +207,24 @@
             <option value="6">Groups of 6</option>
             <option value="7">Groups of 7</option>
           </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="skip-modal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Skip digits">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Skip digits</h2>
+        <button id="skip-close" aria-label="Close" data-close>&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p class="skip-hint">Mark the next digits as already known. They count as pasted.</p>
+        <button id="skip-one" type="button" class="skip-quick">Skip 1 digit</button>
+        <div class="skip-inline">
+          <input type="number" id="skip-count" min="1" value="10">
+          <button id="skip-confirm" type="button" class="setting-action">Skip</button>
         </div>
       </div>
     </div>

@@ -568,6 +568,51 @@ input[type="range"]:disabled {
 #stat-skipped { color: var(--skipped); }
 #stat-pasted { color: var(--muted); }
 
+#stat-pasted-tile {
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+}
+#stat-pasted-tile:hover { background: var(--key-hover); border-color: var(--muted); }
+#stat-pasted-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.skip-hint {
+  margin: 0 0 0.9rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.skip-quick {
+  width: 100%;
+  background: var(--key-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 0.55rem 1rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 0.9rem;
+}
+.skip-quick:hover { background: var(--key-hover); }
+
+.skip-inline {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.skip-inline input[type="number"] {
+  flex: 1;
+  background: var(--key-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  max-width: 140px;
+}
+
 .keypad-hint {
   font-size: 0.85rem;
   font-style: italic;
