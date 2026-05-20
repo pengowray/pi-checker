@@ -681,10 +681,19 @@ function render() {
   const frag = document.createDocumentFragment();
   let correct = 0, wrong = 0, skipped = 0, pasted = 0;
   let pos = 0;
+  let currentGroup = null;
+  const gs = state.groupSize;
 
-  function tagGroup(span) {
-    if (state.groupSize > 0 && pos > 0 && pos % state.groupSize === 0) {
-      span.classList.add('group-start');
+  function appendItem(span) {
+    if (gs > 0) {
+      if (pos % gs === 0) {
+        currentGroup = document.createElement('span');
+        currentGroup.className = 'group';
+        frag.appendChild(currentGroup);
+      }
+      currentGroup.appendChild(span);
+    } else {
+      frag.appendChild(span);
     }
     pos += 1;
   }
@@ -696,8 +705,7 @@ function render() {
         span.className = 'digit skipped-marker';
         span.textContent = s;
         span.title = 'skipped digit';
-        tagGroup(span);
-        frag.appendChild(span);
+        appendItem(span);
         skipped += 1;
       }
       const span = document.createElement('span');
@@ -710,8 +718,7 @@ function render() {
       } else if (e.pasted) {
         span.title = 'pasted';
       }
-      tagGroup(span);
-      frag.appendChild(span);
+      appendItem(span);
       if (e.status === 'correct') {
         if (e.pasted) pasted += 1;
         else correct += 1;
@@ -722,12 +729,12 @@ function render() {
       const span = document.createElement('span');
       span.className = 'digit pending';
       span.textContent = e.char;
-      tagGroup(span);
-      frag.appendChild(span);
+      appendItem(span);
     }
   }
 
   userDigitsEl.replaceChildren(frag);
+  piDisplayEl.classList.toggle('grouped', gs > 0);
   piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
 
   statCorrect.textContent = correct;

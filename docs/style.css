@@ -371,12 +371,32 @@ input[type="range"]:disabled {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 1rem 1.1rem;
-  word-break: break-all;
   line-height: 1.7;
   letter-spacing: 0.04em;
   box-shadow: var(--shadow);
-  overflow-wrap: break-word;
   overflow-y: auto;
+  display: flex;
+  align-items: flex-start;
+}
+
+.pi-display .prefix {
+  flex: 0 0 auto;
+}
+
+.pi-display .pi-body {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  overflow-wrap: break-word;
+}
+
+.pi-display.grouped .pi-body {
+  word-break: normal;
+}
+
+.pi-display.grouped .group {
+  display: inline-block;
+  margin-right: 0.55ch;
 }
 
 .prefix {
@@ -385,7 +405,6 @@ input[type="range"]:disabled {
 }
 
 .digit { display: inline-block; }
-.digit.group-start { margin-left: 0.45em; }
 .digit.correct { color: var(--correct); }
 .digit.correct.pasted { color: var(--fg); opacity: 0.85; }
 .digit.wrong {
