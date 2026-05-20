@@ -527,6 +527,13 @@ input[type="range"]:disabled {
   width: 0.45em;
 }
 
+/* When a user-typed entry is a space character (primes-spaced), give the
+   span an explicit minimum width so the gap reads clearly — a literal " "
+   inside an inline-block can otherwise render too thin to notice. */
+.digit.space-char {
+  min-width: 0.45em;
+}
+
 .cursor {
   display: inline-block;
   color: var(--accent);

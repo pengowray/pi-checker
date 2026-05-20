@@ -920,8 +920,20 @@ function render() {
     if (!primeBoundaries || !primeBoundaries.has(seqPos)) return;
     const space = document.createElement('span');
     space.className = 'prime-space';
-    space.textContent = ' ';
+    space.textContent = ' ';
     frag.appendChild(space);
+  }
+
+  // A literal " " text node inside an inline-block can collapse to a near-
+  // zero width in some browsers, so spaces are rendered as NBSP and given an
+  // explicit width class so they always read as a visible gap.
+  function setCharText(el, char) {
+    if (char === ' ') {
+      el.classList.add('space-char');
+      el.textContent = ' ';
+    } else {
+      el.textContent = char;
+    }
   }
 
   for (const e of state.entries) {
@@ -929,7 +941,7 @@ function render() {
       for (const s of e.missedBefore) {
         const span = document.createElement('span');
         span.className = 'digit missed-marker';
-        span.textContent = s;
+        setCharText(span, s);
         span.title = 'missed digit';
         appendItem(span);
         missed += 1;
@@ -948,10 +960,10 @@ function render() {
         span.className = cls;
         const correctionEl = document.createElement('span');
         correctionEl.className = 'correction';
-        correctionEl.textContent = e.expected;
+        setCharText(correctionEl, e.expected);
         const typedEl = document.createElement('span');
         typedEl.className = 'typed';
-        typedEl.textContent = e.char;
+        setCharText(typedEl, e.char);
         span.appendChild(correctionEl);
         span.appendChild(typedEl);
       } else if (showMask) {
@@ -960,7 +972,7 @@ function render() {
         span.textContent = '·';
       } else {
         span.className = cls;
-        span.textContent = e.char;
+        setCharText(span, e.char);
       }
       if (e.status === 'wrong' && e.expected) {
         span.title = 'typed ' + e.char + ', expected ' + e.expected;
@@ -981,7 +993,7 @@ function render() {
     } else {
       const span = document.createElement('span');
       span.className = 'digit pending';
-      span.textContent = e.char;
+      setCharText(span, e.char);
       appendItem(span);
       seqPos = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
       maybeAppendPrimeBoundary();
