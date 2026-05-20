@@ -31,7 +31,7 @@ test('pi: typing the first digits scores correct', async ({ page }) => {
   await page.keyboard.type('14159');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('5');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('tau prefix is "6." and the digits match 2π', async ({ page }) => {
@@ -41,7 +41,7 @@ test('tau prefix is "6." and the digits match 2π', async ({ page }) => {
   await page.keyboard.type('28318530717');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('11');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('primes shows "2 " as the prefix and a visual space at each prime boundary', async ({ page }) => {
@@ -67,7 +67,7 @@ test('primes-spaced shows the space key and absorbs "2 " into the prefix', async
   await page.keyboard.type('2 3 5 7');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('5');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('primes-spaced collapses double-spaces and ignores a leading space', async ({ page }) => {
@@ -77,7 +77,7 @@ test('primes-spaced collapses double-spaces and ignores a leading space', async 
   await page.keyboard.type(' 2 3 5   7');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('5');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('typed spaces actually render visibly in primes-spaced', async ({ page }) => {
@@ -108,7 +108,7 @@ test('e: prefix is "2." and the first digits score correct', async ({ page }) =>
   await page.keyboard.type('71828182845');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('11');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('ln 2: prefix is "0." and the first digits score correct', async ({ page }) => {
@@ -118,7 +118,7 @@ test('ln 2: prefix is "0." and the first digits score correct', async ({ page })
   await page.keyboard.type('69314718055');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('11');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('champernowne: 9→10 transition is treated as correct digits', async ({ page }) => {
@@ -129,7 +129,7 @@ test('champernowne: 9→10 transition is treated as correct digits', async ({ pa
   await page.keyboard.type('12345678910111213');
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('17');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('champernowne: 99→100 boundary is correct', async ({ page }) => {
@@ -143,7 +143,7 @@ test('champernowne: 99→100 boundary is correct', async ({ page }) => {
   await page.keyboard.type(expected);
   await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('195');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('settings shows digit count under the sequence dropdown', async ({ page }) => {
@@ -245,8 +245,8 @@ test('Ctrl/Cmd/Alt modifiers do not count as digit input (e.g. Ctrl+C in hex)', 
   await page.keyboard.press('Control+c');
   await page.keyboard.press('Control+a');
   await page.keyboard.press('Alt+f');
-  await expect(page.locator('#stat-correct')).toHaveText('0');
-  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
   // Plain typing still works.
   await page.keyboard.type('243F');
   await page.keyboard.press('Enter');
