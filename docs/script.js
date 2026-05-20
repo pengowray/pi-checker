@@ -27,6 +27,7 @@ const SEQUENCES = {
   pi: {
     label: 'π (pi)',
     shortLabel: 'π',
+    hintLabel: 'pi',
     titleHtml: '&pi; Checker',
     integerPart: '3',
     alphabet: '0123456789',
@@ -36,6 +37,7 @@ const SEQUENCES = {
   tau: {
     label: 'τ (tau = 2π)',
     shortLabel: 'τ',
+    hintLabel: 'tau (2π)',
     titleHtml: '&tau; Checker',
     integerPart: '6',
     alphabet: '0123456789',
@@ -45,6 +47,7 @@ const SEQUENCES = {
   phi: {
     label: 'φ (golden ratio)',
     shortLabel: 'φ',
+    hintLabel: 'phi, the golden ratio',
     titleHtml: '&phi; Checker',
     integerPart: '1',
     alphabet: '0123456789',
@@ -54,6 +57,7 @@ const SEQUENCES = {
   sqrt2: {
     label: '√2',
     shortLabel: '√2',
+    hintLabel: 'the square root of 2',
     titleHtml: '&radic;2 Checker',
     integerPart: '1',
     alphabet: '0123456789',
@@ -63,6 +67,7 @@ const SEQUENCES = {
   'pi-binary': {
     label: 'π in binary',
     shortLabel: 'π in binary',
+    hintLabel: 'pi in binary',
     titleHtml: '&pi; in binary',
     integerPart: '11',
     alphabet: '01',
@@ -72,6 +77,7 @@ const SEQUENCES = {
   'pi-hex': {
     label: 'π in hex',
     shortLabel: 'π in hex',
+    hintLabel: 'pi in hexadecimal',
     titleHtml: '&pi; in hex',
     integerPart: '3',
     alphabet: '0123456789ABCDEF',
@@ -81,6 +87,7 @@ const SEQUENCES = {
   primes: {
     label: 'Primes',
     shortLabel: 'primes',
+    hintLabel: 'the list of primes',
     titleHtml: 'Primes',
     integerPart: '',
     alphabet: '0123456789',
@@ -92,6 +99,7 @@ const SEQUENCES = {
   'primes-spaced': {
     label: 'Primes (spaced)',
     shortLabel: 'primes',
+    hintLabel: 'the list of primes, including spaces',
     titleHtml: 'Primes',
     integerPart: '',
     alphabet: '0123456789 ',
@@ -529,7 +537,7 @@ function updateKeypadHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
   const idx = (state.nextSeqIdx || 0) + 1;
-  keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + (def.shortLabel || def.label) + ':';
+  keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + (def.hintLabel || def.shortLabel || def.label) + ':';
 }
 
 function updateModeHint() {

@@ -142,6 +142,22 @@ test('sequence dropdown stays in sync with state after reload', async ({ page })
   await expect(page.locator('#sequence')).toHaveValue('pi');
 });
 
+test('keypad hint uses a verbose label per sequence', async ({ page }) => {
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of pi:');
+  await setSequence(page, 'pi-hex');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of pi in hexadecimal:');
+  await setSequence(page, 'primes-spaced');
+  await expect(page.locator('#keypad-hint')).toHaveText(
+    'Enter digit 1 of the list of primes, including spaces:'
+  );
+  await setSequence(page, 'sqrt2');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of the square root of 2:');
+  // After typing a few digits the position counter advances too.
+  await page.keyboard.type('41421');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 6 of the square root of 2:');
+});
+
 test('skipped tile click opens the skip dialog', async ({ page }) => {
   await page.locator('#stat-skipped-tile').click();
   await expect(page.locator('#skip-modal')).toBeVisible();
