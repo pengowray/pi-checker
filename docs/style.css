@@ -294,24 +294,6 @@ input[type="range"] {
   max-width: 220px;
 }
 
-.setting-inline {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.setting-inline input[type="number"] {
-  flex: 1;
-  background: var(--key-bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.45rem 0.7rem;
-  font-size: 0.95rem;
-  font-family: inherit;
-  max-width: 140px;
-}
-
 .setting-action {
   background: var(--accent);
   color: white;
