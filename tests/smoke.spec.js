@@ -124,8 +124,8 @@ test('hex keypad uses the JE600-style layout (ABCD top row, 0 bottom-right)', as
     ['A', 'B', 'C', 'D'],
     ['1', '2', '3', 'E'],
     ['4', '5', '6', 'F'],
-    ['7', '8', '9', '0'],
-    ['✓', '⌫'],
+    ['7', '8', '9'],
+    ['✓', '0', '⌫'],
   ]);
 });
 
