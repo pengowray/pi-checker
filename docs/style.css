@@ -821,3 +821,50 @@ input[type="range"]:disabled {
 @media (max-width: 360px) {
   .pi-display { font-size: 1.05rem; }
 }
+
+/* Landscape on short viewports (mobile rotated, small windows): keypad
+   moves to the right column, everything else stacks in the left column;
+   actions and footer span the full width below. */
+@media (orientation: landscape) and (max-height: 600px) {
+  main {
+    padding: 0.5rem 0.7rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      "badge   keypad"
+      "timer   keypad"
+      "display keypad"
+      "stats   keypad"
+      "actions actions"
+      "foot    foot";
+    column-gap: 0.7rem;
+    row-gap: 0.4rem;
+  }
+
+  #mode-badge { grid-area: badge; justify-self: start; margin-bottom: 0; }
+  #comp-timer { grid-area: timer; }
+  .display-area { grid-area: display; margin-bottom: 0; min-height: 0; }
+  .stats { grid-area: stats; }
+  .actions { grid-area: actions; margin-bottom: 0; }
+  .foot { grid-area: foot; padding: 0.3rem 0 0.5rem; }
+
+  .keypad-decimal, .keypad-hex {
+    grid-area: keypad;
+    align-self: start;
+    margin-bottom: 0;
+  }
+  .keypad-decimal { width: 230px; }
+  .keypad-hex { width: 280px; }
+
+  .comp-timer {
+    font-size: 1.8rem;
+    margin: 0.05rem 0 0.2rem;
+  }
+
+  .stat-value { font-size: 0.95rem; }
+  .stat-label { font-size: 0.6rem; }
+
+  .keypad-decimal .key { padding: 0.55rem 0; min-height: 50px; font-size: 1.4rem; }
+  .keypad-hex .key { padding: 0.45rem 0; min-height: 46px; font-size: 1.25rem; }
+}
