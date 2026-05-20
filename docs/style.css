@@ -97,6 +97,30 @@ main {
   flex-direction: column;
 }
 
+.comp-timer {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 2.6rem;
+  font-weight: 600;
+  text-align: center;
+  color: var(--fg);
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.comp-timer.warning { color: var(--skipped); }
+.comp-timer.danger {
+  color: var(--wrong);
+  animation: pulseTimer 1s ease-in-out infinite;
+}
+.comp-timer.ended { color: var(--wrong); }
+
+@keyframes pulseTimer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
 .mode-badge {
   display: inline-flex;
   align-items: center;

@@ -98,6 +98,7 @@ const state = {
   gameLocked: false,
   competitiveEnded: false,
   competitiveFrozenAt: 0,
+  hardcoreFailed: false,
   groupSize: 0,
 };
 
@@ -124,6 +125,7 @@ const allCheckBtns = document.querySelectorAll('[data-action="check"]');
 const allBackBtns = document.querySelectorAll('[data-action="back"]');
 const modeHint = document.getElementById('mode-hint');
 const modeBadge = document.getElementById('mode-badge');
+const compTimerEl = document.getElementById('comp-timer');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -249,6 +251,10 @@ function attemptModeChange(newMode) {
     state.gameLocked = false;
   }
 
+  if (state.mode === 'hardcore' && newMode !== 'hardcore') {
+    state.hardcoreFailed = false;
+  }
+
   state.mode = newMode;
   applyModeDefaults();
   return true;
@@ -264,6 +270,7 @@ function clearSession() {
   state.gameLocked = false;
   state.competitiveEnded = false;
   state.competitiveFrozenAt = 0;
+  state.hardcoreFailed = false;
   state.integerCharsConsumed = 0;
 }
 
@@ -282,6 +289,7 @@ function updateModeBadge() {
   const modeName = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
   let delayText;
   if (state.mode === 'competitive' && state.competitiveEnded) delayText = 'ended';
+  else if (state.mode === 'hardcore' && state.hardcoreFailed) delayText = 'failed';
   else if (isManual()) delayText = 'manual';
   else if (state.autoCheckSeconds === 0) delayText = 'instant';
   else delayText = state.autoCheckSeconds + 's auto-check';
@@ -293,13 +301,25 @@ function updateModeHint() {
   const hints = {
     practice: 'Type or paste digits. Backspace removes recent input.',
     competitive: '2s auto-check, 10 minute limit, wrong digits stay locked. Reset is required to start.',
-    hardcore: 'Instant lock-in, no backspace. Reset is required to start.',
+    hardcore: 'Instant lock-in, no backspace. One wrong digit ends the run. Reset is required to start.',
   };
   modeHint.textContent = hints[state.mode] || '';
 }
 
 function isInputLocked() {
-  return state.competitiveEnded && state.mode === 'competitive';
+  if (state.competitiveEnded && state.mode === 'competitive') return true;
+  if (state.hardcoreFailed && state.mode === 'hardcore') return true;
+  return false;
+}
+
+function checkHardcoreFail() {
+  if (state.mode !== 'hardcore' || state.hardcoreFailed) return;
+  for (const e of state.entries) {
+    if (e.checked && e.status === 'wrong') {
+      state.hardcoreFailed = true;
+      return;
+    }
+  }
 }
 
 // ---- Competitive session lifecycle ----
@@ -317,13 +337,18 @@ function endCompetitive() {
 }
 
 function continueInPractice() {
-  if (!(state.mode === 'competitive' && state.competitiveEnded)) return;
-  if (state.startTime !== null) {
-    state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
+  if (state.mode === 'competitive' && state.competitiveEnded) {
+    if (state.startTime !== null) {
+      state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
+    }
+    state.competitiveEnded = false;
+    state.gameLocked = false;
+  } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
+    state.hardcoreFailed = false;
+  } else {
+    return;
   }
   state.mode = 'practice';
-  state.competitiveEnded = false;
-  state.gameLocked = false;
   const radio = document.querySelector('input[name="mode"][value="practice"]');
   if (radio) radio.checked = true;
   applyModeDefaults();
@@ -362,6 +387,7 @@ function inputDigit(d) {
   });
   computeStatuses();
   resetAutoCheckTimer();
+  checkHardcoreFail();
   render();
 }
 
@@ -412,6 +438,7 @@ function inputPaste(text) {
   }
 
   computeStatuses();
+  checkHardcoreFail();
   render();
 }
 
@@ -585,34 +612,51 @@ function formatTime(seconds) {
 }
 
 function tickTime() {
+  // Elapsed time (small indicator)
   if (state.startTime === null) {
     statTime.textContent = '0:00';
     statTime.classList.remove('frozen');
-    return;
-  }
+  } else {
+    if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded) {
+      const elapsedNow = (performance.now() - state.startTime) / 1000;
+      if (elapsedNow >= COMPETITIVE_LIMIT_SECONDS) {
+        endCompetitive();
+        updateUI();
+      }
+    }
 
-  if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded) {
-    const elapsed = (performance.now() - state.startTime) / 1000;
-    if (elapsed >= COMPETITIVE_LIMIT_SECONDS) {
-      endCompetitive();
-      updateUI();
+    let elapsed;
+    if (state.competitiveEnded && state.mode === 'competitive') {
+      elapsed = state.competitiveFrozenAt;
+    } else {
+      elapsed = (performance.now() - state.startTime) / 1000;
+    }
+
+    if (state.mode === 'competitive') {
+      const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
+      statTime.textContent = formatTime(capped);
+      statTime.classList.toggle('frozen', state.competitiveEnded);
+    } else {
+      statTime.textContent = formatTime(elapsed);
+      statTime.classList.remove('frozen');
     }
   }
 
-  let elapsed;
-  if (state.competitiveEnded && state.mode === 'competitive') {
-    elapsed = state.competitiveFrozenAt;
-  } else {
-    elapsed = (performance.now() - state.startTime) / 1000;
-  }
-
+  // Big countdown (competitive only)
   if (state.mode === 'competitive') {
-    const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
-    statTime.textContent = formatTime(capped) + ' / ' + formatTime(COMPETITIVE_LIMIT_SECONDS);
-    statTime.classList.toggle('frozen', state.competitiveEnded);
-  } else {
-    statTime.textContent = formatTime(elapsed);
-    statTime.classList.remove('frozen');
+    let remaining;
+    if (state.startTime === null) {
+      remaining = COMPETITIVE_LIMIT_SECONDS;
+    } else if (state.competitiveEnded) {
+      remaining = Math.max(0, COMPETITIVE_LIMIT_SECONDS - state.competitiveFrozenAt);
+    } else {
+      const e = (performance.now() - state.startTime) / 1000;
+      remaining = Math.max(0, COMPETITIVE_LIMIT_SECONDS - e);
+    }
+    compTimerEl.textContent = formatTime(remaining);
+    compTimerEl.classList.toggle('ended', state.competitiveEnded);
+    compTimerEl.classList.toggle('danger', !state.competitiveEnded && remaining <= 10 && state.gameLocked);
+    compTimerEl.classList.toggle('warning', !state.competitiveEnded && remaining > 10 && remaining <= 60 && state.gameLocked);
   }
 }
 setInterval(tickTime, 250);
@@ -648,7 +692,9 @@ function updateUI() {
   allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
   stopBtn.hidden = !compActive;
-  continueBtn.hidden = !(state.mode === 'competitive' && state.competitiveEnded);
+  continueBtn.hidden = !((state.mode === 'competitive' && state.competitiveEnded) ||
+                        (state.mode === 'hardcore' && state.hardcoreFailed));
+  compTimerEl.hidden = state.mode !== 'competitive';
 
   updateModeHint();
   updateModeBadge();
