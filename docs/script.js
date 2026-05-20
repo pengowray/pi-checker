@@ -92,7 +92,7 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_KEYPAD_FLIP = false;
-const DEFAULT_PRACTICE_DISPLAY = 'oneline';
+const DEFAULT_PRACTICE_DISPLAY = 'annotations';
 
 const state = {
   sequenceId: 'pi',
