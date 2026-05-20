@@ -638,6 +638,14 @@ input[type="range"]:disabled {
   font-weight: 500;
 }
 
+.stat-time.paused {
+  color: var(--accent);
+  font-style: italic;
+}
+.stat-time.paused::before {
+  content: "\23F8\FE0E ";
+}
+
 #reset-btn {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -650,6 +658,22 @@ input[type="range"]:disabled {
 }
 
 #reset-btn:hover { background: var(--key-hover); }
+
+#reset-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 500;
+}
+#reset-btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+
+#continue-btn.secondary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-weight: normal;
+}
+#continue-btn.secondary:hover { background: var(--key-hover); filter: none; }
 
 .foot {
   text-align: center;

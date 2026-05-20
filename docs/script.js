@@ -111,6 +111,8 @@ const state = {
   competitiveFrozenAt: 0,
   hardcoreFailed: false,
   hardcoreFrozenAt: 0,
+  practicePaused: false,
+  practicePauseDisplayedAt: 0,
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   compTimerHidden: false,
@@ -342,6 +344,8 @@ function clearSession() {
   state.competitiveFrozenAt = 0;
   state.hardcoreFailed = false;
   state.hardcoreFrozenAt = 0;
+  state.practicePaused = false;
+  state.practicePauseDisplayedAt = 0;
   state.integerCharsConsumed = 0;
   state.compTimerHidden = false;
 }
@@ -411,6 +415,33 @@ function endCompetitive() {
   render();
 }
 
+function endHardcore() {
+  if (state.mode !== 'hardcore' || state.hardcoreFailed) return;
+  state.hardcoreFailed = true;
+  state.hardcoreFrozenAt = state.startTime === null ? 0
+    : (performance.now() - state.startTime) / 1000;
+  if (state.autoCheckTimer) {
+    clearTimeout(state.autoCheckTimer);
+    state.autoCheckTimer = null;
+  }
+  stopCheckBar();
+  markAllChecked();
+  render();
+}
+
+function practicePause() {
+  if (state.mode !== 'practice') return;
+  if (state.startTime === null || state.practicePaused) return;
+  state.practicePaused = true;
+  state.practicePauseDisplayedAt = (performance.now() - state.startTime) / 1000;
+  render();
+}
+
+function practiceResume() {
+  if (!state.practicePaused) return;
+  state.practicePaused = false;
+}
+
 function continueInPractice() {
   if (state.mode === 'competitive' && state.competitiveEnded) {
     if (state.startTime !== null) {
@@ -438,6 +469,8 @@ function inputDigit(d) {
   if (isInputLocked()) return;
   d = d.toUpperCase();
   if (!state.alphabet.includes(d)) return;
+
+  practiceResume();
 
   // Silently absorb leading integer-part chars (e.g. user types "3" first
   // when "3." is already displayed; or "1" then "1" for pi-binary).
@@ -477,6 +510,8 @@ function inputPaste(text) {
     if (state.alphabet.includes(c)) digits.push(c);
   }
   if (digits.length === 0) return;
+
+  practiceResume();
 
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
@@ -728,9 +763,13 @@ function tickTime() {
       elapsed = state.competitiveFrozenAt;
     } else if (state.hardcoreFailed && state.mode === 'hardcore') {
       elapsed = state.hardcoreFrozenAt;
+    } else if (state.practicePaused && state.mode === 'practice') {
+      elapsed = state.practicePauseDisplayedAt;
     } else {
       elapsed = (performance.now() - state.startTime) / 1000;
     }
+
+    statTime.classList.toggle('paused', state.mode === 'practice' && state.practicePaused);
 
     if (state.mode === 'competitive') {
       const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
@@ -769,7 +808,14 @@ function updateUI() {
   const hasEntries = state.entries.length > 0;
   const inputLocked = isInputLocked();
   const compActive = state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded;
+  const hardcoreActive = state.mode === 'hardcore' && state.startTime !== null && !state.hardcoreFailed;
+  const practiceActive = state.mode === 'practice' && state.startTime !== null && !state.practicePaused;
+  const gameOver = (state.mode === 'competitive' && state.competitiveEnded) ||
+                   (state.mode === 'hardcore' && state.hardcoreFailed);
 
+  // Keep the settings panel's mode radio in sync with state.mode in case
+  // state was changed programmatically (Continue button, etc.)
+  modeInputs.forEach(input => { input.checked = input.value === state.mode; });
   modeInputs.forEach(input => { input.disabled = false; input.parentElement.title = ''; });
   autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || state.gameLocked;
 
@@ -794,9 +840,16 @@ function updateUI() {
   const checkDisabled = inputLocked || !hasPending();
   allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
-  stopBtn.hidden = !compActive;
-  continueBtn.hidden = !((state.mode === 'competitive' && state.competitiveEnded) ||
-                        (state.mode === 'hardcore' && state.hardcoreFailed));
+  // Stop button: ends in comp/hardcore, pseudo-pauses in practice
+  stopBtn.hidden = !(compActive || hardcoreActive || practiceActive);
+  stopBtn.textContent = state.mode === 'practice' ? 'Pause' : 'Stop';
+
+  continueBtn.hidden = !gameOver;
+
+  // On game over the user's natural action is to start over, so make Reset
+  // the prominent button and demote Continue.
+  resetBtn.classList.toggle('primary', gameOver);
+  continueBtn.classList.toggle('secondary', gameOver);
   compTimerEl.hidden = state.mode !== 'competitive';
   // Dim when the user has clicked it to hide, but force visible when the
   // session is over so the final time stands out.
@@ -830,7 +883,11 @@ allDigitBtns.forEach(btn => {
 allBackBtns.forEach(btn => wireKey(btn, backspace));
 allCheckBtns.forEach(btn => wireKey(btn, forceCheck));
 resetBtn.addEventListener('click', reset);
-stopBtn.addEventListener('click', () => endCompetitive());
+stopBtn.addEventListener('click', () => {
+  if (state.mode === 'competitive') endCompetitive();
+  else if (state.mode === 'hardcore') endHardcore();
+  else if (state.mode === 'practice') practicePause();
+});
 continueBtn.addEventListener('click', () => continueInPractice());
 
 function toggleCompTimer() {
