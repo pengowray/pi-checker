@@ -26,6 +26,7 @@ const SHORT_PI = (
 const SEQUENCES = {
   pi: {
     label: 'π (pi)',
+    shortLabel: 'π',
     titleHtml: '&pi; Checker',
     integerPart: '3',
     alphabet: '0123456789',
@@ -34,6 +35,7 @@ const SEQUENCES = {
   },
   phi: {
     label: 'φ (golden ratio)',
+    shortLabel: 'φ',
     titleHtml: '&phi; Checker',
     integerPart: '1',
     alphabet: '0123456789',
@@ -42,6 +44,7 @@ const SEQUENCES = {
   },
   sqrt2: {
     label: '√2',
+    shortLabel: '√2',
     titleHtml: '&radic;2 Checker',
     integerPart: '1',
     alphabet: '0123456789',
@@ -50,6 +53,7 @@ const SEQUENCES = {
   },
   'pi-binary': {
     label: 'π in binary',
+    shortLabel: 'π in binary',
     titleHtml: '&pi; in binary',
     integerPart: '11',
     alphabet: '01',
@@ -58,6 +62,7 @@ const SEQUENCES = {
   },
   'pi-hex': {
     label: 'π in hex',
+    shortLabel: 'π in hex',
     titleHtml: '&pi; in hex',
     integerPart: '3',
     alphabet: '0123456789ABCDEF',
@@ -148,6 +153,7 @@ const allBackBtns = document.querySelectorAll('[data-action="back"]');
 const modeHint = document.getElementById('mode-hint');
 const modeBadge = document.getElementById('mode-badge');
 const compTimerEl = document.getElementById('comp-timer');
+const keypadHintEl = document.getElementById('keypad-hint');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
@@ -447,6 +453,13 @@ function updateModeBadge() {
   else delayText = state.autoCheckSeconds + 's auto-check';
   modeBadge.textContent = modeName + ' · ' + delayText;
   modeBadge.classList.toggle('locked', state.gameLocked && !state.competitiveEnded);
+}
+
+function updateKeypadHint() {
+  const def = SEQUENCES[state.sequenceId];
+  if (!def) return;
+  const idx = (state.nextSeqIdx || 0) + 1;
+  keypadHintEl.textContent = 'enter digit ' + idx + ' of ' + (def.shortLabel || def.label);
 }
 
 function updateModeHint() {
@@ -769,6 +782,9 @@ function computeStatuses() {
     }
   }
 
+  // Position in the sequence the next typed digit will land at.
+  state.nextSeqIdx = seqIdx;
+
   // Mark the next two entries after each skip as the skip's "confirming"
   // digits. Deleting one of these unwinds the skip and so should count as
   // erasing an error, unless the digit would have been correct at its
@@ -871,6 +887,7 @@ function render() {
   piDisplayEl.classList.toggle('diff-mode',
     (state.mode === 'competitive' && state.competitiveEnded) ||
     (state.mode === 'practice' && state.practiceDisplay === 'annotations'));
+  updateKeypadHint();
   // Defer to next frame so the new content is laid out before we measure
   // and scroll to the bottom; without this the scrollHeight reading can
   // lag a frame behind on some browsers.

@@ -568,6 +568,15 @@ input[type="range"]:disabled {
 #stat-skipped { color: var(--skipped); }
 #stat-pasted { color: var(--muted); }
 
+.keypad-hint {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .keypad {
   display: grid;
   gap: 0.55rem;
@@ -838,7 +847,7 @@ input[type="range"]:disabled {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     grid-template-areas:
-      "badge   keypad"
+      "badge   hint"
       "timer   keypad"
       "display keypad"
       "stats   keypad"
@@ -846,6 +855,8 @@ input[type="range"]:disabled {
     column-gap: 0.7rem;
     row-gap: 0.35rem;
   }
+
+  .keypad-hint { grid-area: hint; margin: 0; font-size: 0.72rem; }
 
   #mode-badge {
     grid-area: badge;
