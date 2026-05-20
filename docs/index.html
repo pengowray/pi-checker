@@ -115,10 +115,12 @@
         </div>
 
         <div class="setting">
-          <div class="setting-label"><label for="skip-to">Skip to digit</label></div>
+          <div class="setting-label">
+            <label for="start-at">Start at digit</label>
+            <button type="button" class="setting-reset" data-reset="start-at" hidden aria-label="Reset start-at to default">&#x2715;</button>
+          </div>
           <div class="setting-inline">
-            <input type="number" id="skip-to" min="1" placeholder="n">
-            <button id="skip-to-go" type="button" class="setting-action">Go</button>
+            <input type="number" id="start-at" min="0" value="0">
           </div>
         </div>
 

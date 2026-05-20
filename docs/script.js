@@ -120,6 +120,7 @@ const state = {
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
+  startAtDigit: 0,
   compTimerHidden: false,
 };
 
@@ -150,8 +151,7 @@ const compTimerEl = document.getElementById('comp-timer');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
-const skipToInput = document.getElementById('skip-to');
-const skipToBtn = document.getElementById('skip-to-go');
+const startAtInput = document.getElementById('start-at');
 const resetBtns = document.querySelectorAll('.setting-reset');
 
 const statCorrect = document.getElementById('stat-correct');
@@ -214,15 +214,9 @@ practiceDisplayInputs.forEach(input => {
   });
 });
 
-// ---- Skip to digit ----
-function skipToDigit(n) {
-  if (!n || n <= 0) return;
-  n = Math.min(n, state.digits.length);
-  if (state.entries.length > 0) {
-    const ok = confirm('This will reset your progress. Skip to digit ' + n + '?');
-    if (!ok) return;
-  }
-  clearSession();
+// ---- Start at digit (session-level setting; not persisted across page loads) ----
+function applyStartAtDigit() {
+  const n = Math.min(state.startAtDigit, state.digits.length);
   for (let i = 0; i < n; i++) {
     state.entries.push({
       char: state.digits[i],
@@ -235,21 +229,22 @@ function skipToDigit(n) {
     });
   }
   computeStatuses();
-  render();
 }
 
-skipToBtn.addEventListener('click', () => {
-  const n = parseInt(skipToInput.value, 10);
-  if (!isNaN(n) && n > 0) {
-    skipToDigit(n);
-    skipToInput.value = '';
+startAtInput.addEventListener('change', () => {
+  const raw = parseInt(startAtInput.value, 10);
+  const newValue = (isNaN(raw) || raw < 0) ? 0 : raw;
+  if (newValue === state.startAtDigit) {
+    startAtInput.value = newValue;
+    return;
   }
-});
-skipToInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    skipToBtn.click();
-    e.preventDefault();
-  }
+  state.startAtDigit = newValue;
+  startAtInput.value = newValue;
+  updateResetVisibility();
+  // Re-seed the session with the new start-at value
+  clearSession();
+  applyStartAtDigit();
+  render();
 });
 
 // ---- Paste next digit (V key) ----
@@ -1019,6 +1014,7 @@ function reset() {
   const checkedRadio = document.querySelector('input[name="mode"]:checked');
   if (checkedRadio) state.mode = checkedRadio.value;
   applyModeDefaults();
+  applyStartAtDigit();
   render();
 }
 
@@ -1139,6 +1135,11 @@ resetBtns.forEach(btn => {
       localStorage.setItem(STORAGE_KEYS.practiceDisplay, DEFAULT_PRACTICE_DISPLAY);
       updateResetVisibility();
       render();
+    } else if (target === 'start-at') {
+      // Restore default; don't touch the current session
+      state.startAtDigit = 0;
+      startAtInput.value = 0;
+      updateResetVisibility();
     }
   });
 });
@@ -1152,6 +1153,7 @@ function updateResetVisibility() {
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
     else if (target === 'practice-display') isDefault = state.practiceDisplay === DEFAULT_PRACTICE_DISPLAY;
+    else if (target === 'start-at') isDefault = state.startAtDigit === 0;
     btn.hidden = isDefault;
   });
 }
