@@ -438,6 +438,11 @@ input[type="range"]:disabled {
   text-underline-offset: 3px;
   text-decoration-thickness: 2px;
 }
+
+.digit.wrong.masked {
+  text-decoration: none;
+  opacity: 0.85;
+}
 .digit.pending { color: var(--pending); }
 .digit.skipped-marker {
   color: var(--skipped);

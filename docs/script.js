@@ -753,10 +753,12 @@ function render() {
       const span = document.createElement('span');
       let cls = 'digit ' + e.status;
       if (e.pasted) cls += ' pasted';
+      const maskWrong = state.mode === 'competitive' && e.status === 'wrong';
+      if (maskWrong) cls += ' masked';
       span.className = cls;
-      span.textContent = e.char;
+      span.textContent = maskWrong ? '·' : e.char;
       if (e.status === 'wrong' && e.expected) {
-        span.title = 'expected ' + e.expected;
+        span.title = 'typed ' + e.char + ', expected ' + e.expected;
       } else if (e.pasted) {
         span.title = 'pasted';
       }
