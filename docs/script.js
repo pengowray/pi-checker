@@ -109,16 +109,24 @@ modeInputs.forEach(input => {
       const cur = document.querySelector(`input[name="mode"][value="${state.mode}"]`);
       if (cur) cur.checked = true;
     }
-    updateUI();
+    render();
   });
 });
 
 function attemptModeChange(newMode) {
   if (newMode === state.mode) return true;
 
-  // Competitive and Flawless can only be entered from a fresh session.
-  if ((newMode === 'competitive' || newMode === 'flawless') && state.entries.length > 0) {
-    return false;
+  // Competitive and Flawless always start from a fresh session.
+  // If there is existing progress, confirm before clearing it.
+  if (newMode === 'competitive' || newMode === 'flawless') {
+    if (state.entries.length > 0) {
+      const ok = confirm('This will reset your current progress. Start a new ' + newMode + ' session?');
+      if (!ok) return false;
+    }
+    clearSession();
+    state.mode = newMode;
+    applyModeDefaults();
+    return true;
   }
 
   // Leaving an active competitive session to Normal requires confirmation.
@@ -141,6 +149,18 @@ function attemptModeChange(newMode) {
   state.mode = newMode;
   applyModeDefaults();
   return true;
+}
+
+function clearSession() {
+  if (state.autoCheckTimer) {
+    clearTimeout(state.autoCheckTimer);
+    state.autoCheckTimer = null;
+  }
+  state.entries = [];
+  state.startTime = null;
+  state.gameLocked = false;
+  state.competitiveEnded = false;
+  state.competitiveFrozenAt = 0;
 }
 
 function applyModeDefaults() {
@@ -475,17 +495,7 @@ function updateUI() {
   const inputLocked = isInputLocked();
   const compActive = state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded;
 
-  // Mode radios: competitive and flawless need a fresh session
-  modeInputs.forEach(input => {
-    if (input.value === 'normal') {
-      input.disabled = false;
-      input.parentElement.title = '';
-    } else {
-      const disabled = hasEntries && state.mode !== input.value;
-      input.disabled = disabled;
-      input.parentElement.title = disabled ? 'Reset to start a ' + input.value + ' session.' : '';
-    }
-  });
+  modeInputs.forEach(input => { input.disabled = false; input.parentElement.title = ''; });
   autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || state.gameLocked;
 
   // Digit keys
@@ -515,16 +525,7 @@ function updateUI() {
 
 // ---- Reset ----
 function reset() {
-  if (state.autoCheckTimer) {
-    clearTimeout(state.autoCheckTimer);
-    state.autoCheckTimer = null;
-  }
-  state.entries = [];
-  state.startTime = null;
-  state.gameLocked = false;
-  state.competitiveEnded = false;
-  state.competitiveFrozenAt = 0;
-  // re-read mode from radio
+  clearSession();
   const checkedRadio = document.querySelector('input[name="mode"]:checked');
   if (checkedRadio) state.mode = checkedRadio.value;
   applyModeDefaults();
