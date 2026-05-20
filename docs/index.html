@@ -92,7 +92,10 @@
       </div>
       <div class="modal-body">
         <div class="setting">
-          <div class="setting-label"><label for="sequence">Sequence</label></div>
+          <div class="setting-label">
+            <label for="sequence">Sequence</label>
+            <button type="button" class="setting-reset" data-reset="sequence" hidden aria-label="Reset sequence to default">&#x2715;</button>
+          </div>
           <select id="sequence" class="setting-select">
             <option value="pi">&pi; (pi)</option>
             <option value="phi">&phi; (golden ratio)</option>
@@ -124,12 +127,32 @@
         <div class="setting">
           <div class="setting-label">
             Auto-check delay: <strong id="auto-seconds-label">3s</strong>
+            <button type="button" class="setting-reset" data-reset="auto-check" hidden aria-label="Reset auto-check delay to default">&#x2715;</button>
           </div>
           <input type="range" id="auto-seconds" min="0" max="31" value="3" step="1">
         </div>
 
+        <h3 class="settings-subhead">Display</h3>
+
         <div class="setting">
-          <div class="setting-label"><label for="group-size">Group digits</label></div>
+          <div class="setting-label">Theme</div>
+          <div class="mode-selector" role="radiogroup" aria-label="Theme">
+            <label class="mode-option">
+              <input type="radio" name="theme" value="light">
+              <span>Light</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="theme" value="dark">
+              <span>Dark</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            <label for="group-size">Group digits</label>
+            <button type="button" class="setting-reset" data-reset="group-size" hidden aria-label="Reset grouping to default">&#x2715;</button>
+          </div>
           <select id="group-size" class="setting-select">
             <option value="0">Off</option>
             <option value="2">Groups of 2</option>

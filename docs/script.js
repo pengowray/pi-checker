@@ -78,8 +78,16 @@ if (window.SEQUENCE_DATA) {
 // ---- Constants ----
 const MODE_FIXED_DELAY = { competitive: 2, hardcore: 0 };
 const DEFAULT_PRACTICE_DELAY = 3;
+const DEFAULT_GROUP_SIZE = 0;
+const DEFAULT_SEQUENCE = 'pi';
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
 const COMPETITIVE_LIMIT_SECONDS = 10 * 60;
+
+const STORAGE_KEYS = {
+  theme: 'pi-theme',
+  practiceDelay: 'pi-practice-delay',
+  groupSize: 'pi-group-size',
+};
 
 const state = {
   sequenceId: 'pi',
@@ -126,6 +134,8 @@ const allBackBtns = document.querySelectorAll('[data-action="back"]');
 const modeHint = document.getElementById('mode-hint');
 const modeBadge = document.getElementById('mode-badge');
 const compTimerEl = document.getElementById('comp-timer');
+const themeInputs = document.querySelectorAll('input[name="theme"]');
+const resetBtns = document.querySelectorAll('.setting-reset');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -135,7 +145,7 @@ const statTime = document.getElementById('stat-time');
 
 // ---- Theme ----
 function initTheme() {
-  const saved = localStorage.getItem('pi-theme');
+  const saved = localStorage.getItem(STORAGE_KEYS.theme);
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const theme = saved || (prefersDark ? 'dark' : 'light');
   setTheme(theme);
@@ -143,12 +153,17 @@ function initTheme() {
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   themeToggle.textContent = theme === 'dark' ? '☀️' : '\u{1F319}';
+  themeInputs.forEach(input => { input.checked = input.value === theme; });
+  localStorage.setItem(STORAGE_KEYS.theme, theme);
 }
 themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
-  const next = current === 'dark' ? 'light' : 'dark';
-  setTheme(next);
-  localStorage.setItem('pi-theme', next);
+  setTheme(current === 'dark' ? 'light' : 'dark');
+});
+themeInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (input.checked) setTheme(input.value);
+  });
 });
 initTheme();
 
@@ -181,12 +196,15 @@ sequenceSelect.addEventListener('change', () => {
   }
   clearSession();
   applySequence(newId);
+  updateResetVisibility();
   render();
 });
 
 // ---- Group size ----
 groupSizeSelect.addEventListener('change', () => {
   state.groupSize = parseInt(groupSizeSelect.value, 10) || 0;
+  localStorage.setItem(STORAGE_KEYS.groupSize, String(state.groupSize));
+  updateResetVisibility();
   render();
 });
 
@@ -198,8 +216,10 @@ autoSecondsInput.addEventListener('input', () => {
   }
   state.autoCheckSeconds = parseInt(autoSecondsInput.value, 10);
   state.practiceDelay = state.autoCheckSeconds;
+  localStorage.setItem(STORAGE_KEYS.practiceDelay, String(state.practiceDelay));
   renderDelayLabel();
   updateModeBadge();
+  updateResetVisibility();
   if (hasPending()) resetAutoCheckTimer();
 });
 
@@ -211,13 +231,34 @@ function renderDelayLabel() {
   autoSecondsLabel.textContent = isManual() ? 'manual' : state.autoCheckSeconds + 's';
 }
 
+function processModeChange(newMode, targetInput) {
+  if (newMode === state.mode) return;
+  if (attemptModeChange(newMode)) {
+    if (targetInput) targetInput.checked = true;
+  } else {
+    const cur = document.querySelector(`input[name="mode"][value="${state.mode}"]`);
+    if (cur) cur.checked = true;
+  }
+  render();
+}
+
+// Click on the label itself, with preventDefault so the radio doesn't auto-
+// activate. This catches every click reliably (including rapid clicks where
+// the radio's `change` event sometimes fails to re-fire).
+document.querySelectorAll('.mode-selector .mode-option').forEach(label => {
+  const input = label.querySelector('input[name="mode"]');
+  if (!input) return;
+  label.addEventListener('click', (e) => {
+    e.preventDefault();
+    processModeChange(input.value, input);
+  });
+});
+
+// Fallback for keyboard radio-group navigation (arrow keys fire `change`
+// without a click event).
 modeInputs.forEach(input => {
   input.addEventListener('change', () => {
-    if (!attemptModeChange(input.value)) {
-      const cur = document.querySelector(`input[name="mode"][value="${state.mode}"]`);
-      if (cur) cur.checked = true;
-    }
-    render();
+    processModeChange(input.value, input);
   });
 });
 
@@ -786,6 +827,46 @@ document.addEventListener('paste', (e) => {
   inputPaste(text);
 });
 
+// ---- Settings reset buttons ----
+resetBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.reset;
+    if (target === 'sequence') {
+      if (state.sequenceId === DEFAULT_SEQUENCE) return;
+      sequenceSelect.value = DEFAULT_SEQUENCE;
+      sequenceSelect.dispatchEvent(new Event('change'));
+    } else if (target === 'auto-check') {
+      state.practiceDelay = DEFAULT_PRACTICE_DELAY;
+      localStorage.setItem(STORAGE_KEYS.practiceDelay, String(DEFAULT_PRACTICE_DELAY));
+      if (!(state.mode in MODE_FIXED_DELAY)) {
+        state.autoCheckSeconds = DEFAULT_PRACTICE_DELAY;
+        autoSecondsInput.value = DEFAULT_PRACTICE_DELAY;
+        renderDelayLabel();
+        updateModeBadge();
+        if (hasPending()) resetAutoCheckTimer();
+      }
+      updateResetVisibility();
+    } else if (target === 'group-size') {
+      state.groupSize = DEFAULT_GROUP_SIZE;
+      groupSizeSelect.value = String(DEFAULT_GROUP_SIZE);
+      localStorage.setItem(STORAGE_KEYS.groupSize, String(DEFAULT_GROUP_SIZE));
+      updateResetVisibility();
+      render();
+    }
+  });
+});
+
+function updateResetVisibility() {
+  resetBtns.forEach(btn => {
+    const target = btn.dataset.reset;
+    let isDefault = true;
+    if (target === 'sequence') isDefault = state.sequenceId === DEFAULT_SEQUENCE;
+    else if (target === 'auto-check') isDefault = state.practiceDelay === DEFAULT_PRACTICE_DELAY;
+    else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
+    btn.hidden = isDefault;
+  });
+}
+
 // ---- Settings modal ----
 function openSettings() {
   settingsModal.hidden = false;
@@ -824,9 +905,26 @@ function loadLongPi() {
   document.head.appendChild(script);
 }
 
+// ---- Load persisted settings ----
+function loadPersistedSettings() {
+  const savedDelay = parseInt(localStorage.getItem(STORAGE_KEYS.practiceDelay), 10);
+  if (!isNaN(savedDelay) && savedDelay >= 0 && savedDelay <= MANUAL_DELAY) {
+    state.practiceDelay = savedDelay;
+    state.autoCheckSeconds = savedDelay;
+    autoSecondsInput.value = savedDelay;
+  }
+  const savedGroup = parseInt(localStorage.getItem(STORAGE_KEYS.groupSize), 10);
+  if (!isNaN(savedGroup) && [0, 2, 3, 4, 5, 6, 7].includes(savedGroup)) {
+    state.groupSize = savedGroup;
+    groupSizeSelect.value = String(savedGroup);
+  }
+}
+
 // ---- Init ----
+loadPersistedSettings();
 applySequence('pi');
 applyModeDefaults();
 updateModeHint();
+updateResetVisibility();
 render();
 loadLongPi();
