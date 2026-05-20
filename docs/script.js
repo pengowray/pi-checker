@@ -1185,11 +1185,12 @@ function render() {
     piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
   });
 
-  statCorrect.textContent = correct;
-  statWrong.textContent = wrong;
-  statMissed.textContent = missed;
-  statSkipped.textContent = skipped;
-  statErased.textContent = state.erasedErrors;
+  const zeroDash = (n) => (n ? String(n) : '—');
+  statCorrect.textContent = zeroDash(correct);
+  statWrong.textContent = zeroDash(wrong);
+  statMissed.textContent = zeroDash(missed);
+  statSkipped.textContent = zeroDash(skipped);
+  statErased.textContent = zeroDash(state.erasedErrors);
 
   updateUI();
 }
