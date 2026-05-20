@@ -684,23 +684,27 @@ input[type="range"]:disabled {
 .keypad [data-digit=" "] { grid-area: ksp; }
 .keypad-decimal:not(.with-space) [data-digit=" "] { display: none; }
 
+/* Jameco JE600-style hex keypad: A-F across the top, decimal digits in
+   a 3-column phone layout below them with the trailing hex digits filling
+   the right column, then 0 at the bottom-right, and the check/backspace
+   actions on their own row. */
 .keypad-hex {
   grid-template-columns: repeat(4, 1fr);
   grid-template-areas:
-    "k1 k2 k3 kA"
-    "k4 k5 k6 kB"
-    "k7 k8 k9 kC"
-    "kc k0 kb kD"
-    ".  kE kF .";
+    "kA kB kC kD"
+    "k1 k2 k3 kE"
+    "k4 k5 k6 kF"
+    "k7 k8 k9 k0"
+    "kc kc kb kb";
 }
 
 .keypad-hex.flipped {
   grid-template-areas:
-    "k7 k8 k9 kA"
-    "k4 k5 k6 kB"
-    "k1 k2 k3 kC"
-    "kc k0 kb kD"
-    ".  kE kF .";
+    "kA kB kC kD"
+    "k7 k8 k9 kE"
+    "k4 k5 k6 kF"
+    "k1 k2 k3 k0"
+    "kc kc kb kb";
 }
 
 .keypad [data-digit="0"] { grid-area: k0; }

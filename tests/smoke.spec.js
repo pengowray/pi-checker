@@ -94,6 +94,41 @@ test('typed spaces actually render visibly in primes-spaced', async ({ page }) =
   expect(spaceWidth).toBeGreaterThan(2);
 });
 
+test('hex keypad uses the JE600-style layout (ABCD top row, 0 bottom-right)', async ({ page }) => {
+  await setSequence(page, 'pi-hex');
+  await expect(page.locator('#keypad-hex')).toBeVisible();
+  // Read each key's center position and group by row (using rounded y).
+  const layout = await page.evaluate(() => {
+    const keys = Array.from(document.querySelectorAll('#keypad-hex .key'));
+    const items = keys
+      .filter(k => k.dataset.digit || k.dataset.action) // include disabled keys
+      .map(k => {
+        const r = k.getBoundingClientRect();
+        return {
+          label: k.dataset.digit || (k.dataset.action === 'check' ? '✓' : '⌫'),
+          x: Math.round(r.left + r.width / 2),
+          y: Math.round(r.top + r.height / 2),
+        };
+      });
+    // Group by approximate y, then sort each row by x.
+    items.sort((a, b) => a.y - b.y || a.x - b.x);
+    const rows = [];
+    for (const it of items) {
+      const last = rows[rows.length - 1];
+      if (last && Math.abs(last[0].y - it.y) < 10) last.push(it);
+      else rows.push([it]);
+    }
+    return rows.map(r => r.map(it => it.label));
+  });
+  expect(layout).toEqual([
+    ['A', 'B', 'C', 'D'],
+    ['1', '2', '3', 'E'],
+    ['4', '5', '6', 'F'],
+    ['7', '8', '9', '0'],
+    ['✓', '⌫'],
+  ]);
+});
+
 test('skipped tile click opens the skip dialog', async ({ page }) => {
   await page.locator('#stat-skipped-tile').click();
   await expect(page.locator('#skip-modal')).toBeVisible();
