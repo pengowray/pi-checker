@@ -824,47 +824,67 @@ input[type="range"]:disabled {
 
 /* Landscape on short viewports (mobile rotated, small windows): keypad
    moves to the right column, everything else stacks in the left column;
-   actions and footer span the full width below. */
+   actions span the full width below. The footer hint and the header
+   subtitle are hidden to reclaim vertical room. */
 @media (orientation: landscape) and (max-height: 600px) {
+  header { padding: 0.4rem 0.9rem; }
+  header h1 { font-size: 1.1rem; letter-spacing: 0.3px; }
+  .subtitle { display: none; }
+  .header-actions button { padding: 0.3rem 0.55rem; font-size: 1rem; min-width: 2rem; }
+
   main {
-    padding: 0.5rem 0.7rem;
+    padding: 0.4rem 0.7rem;
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       "badge   keypad"
       "timer   keypad"
       "display keypad"
       "stats   keypad"
-      "actions actions"
-      "foot    foot";
+      "actions actions";
     column-gap: 0.7rem;
-    row-gap: 0.4rem;
+    row-gap: 0.35rem;
   }
 
-  #mode-badge { grid-area: badge; justify-self: start; margin-bottom: 0; }
+  #mode-badge {
+    grid-area: badge;
+    justify-self: start;
+    margin: 0;
+    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+  }
   #comp-timer { grid-area: timer; }
   .display-area { grid-area: display; margin-bottom: 0; min-height: 0; }
-  .stats { grid-area: stats; }
-  .actions { grid-area: actions; margin-bottom: 0; }
-  .foot { grid-area: foot; padding: 0.3rem 0 0.5rem; }
+  .stats { grid-area: stats; gap: 0.25rem; }
+  .stats > div { padding: 0.3rem 0.25rem; border-radius: 8px; }
+  .actions { grid-area: actions; margin-bottom: 0; gap: 0.4rem; }
+  .foot { display: none; }
 
   .keypad-decimal, .keypad-hex {
     grid-area: keypad;
-    align-self: start;
+    align-self: stretch;
     margin-bottom: 0;
+    gap: 0.35rem;
   }
-  .keypad-decimal { width: 230px; }
-  .keypad-hex { width: 280px; }
+  .keypad-decimal { width: 260px; }
+  .keypad-hex { width: 320px; }
+
+  .pi-display { font-size: 1.2rem; padding: 0.6rem 0.8rem; }
 
   .comp-timer {
-    font-size: 1.8rem;
-    margin: 0.05rem 0 0.2rem;
+    font-size: 1.6rem;
+    margin: 0;
+    letter-spacing: 0.04em;
   }
 
-  .stat-value { font-size: 0.95rem; }
-  .stat-label { font-size: 0.6rem; }
+  .stat-value { font-size: 0.9rem; }
+  .stat-label { font-size: 0.58rem; letter-spacing: 0.03em; }
 
-  .keypad-decimal .key { padding: 0.55rem 0; min-height: 50px; font-size: 1.4rem; }
-  .keypad-hex .key { padding: 0.45rem 0; min-height: 46px; font-size: 1.25rem; }
+  .keypad-decimal .key { padding: 0.45rem 0; min-height: 44px; font-size: 1.3rem; }
+  .keypad-hex .key { padding: 0.3rem 0; min-height: 38px; font-size: 1.15rem; }
+
+  #reset-btn { padding: 0.35rem 1rem; font-size: 0.85rem; }
+  #stop-btn, #continue-btn { padding: 0.35rem 0.8rem; font-size: 0.85rem; }
+  .stat-time { font-size: 0.85rem; }
 }
