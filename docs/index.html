@@ -21,7 +21,7 @@
 
   <main>
     <div id="comp-timer" class="comp-timer" hidden role="button" tabindex="0" aria-label="Competitive countdown, click to hide" title="Click to hide / show">15:00</div>
-    <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings">Practice &middot; 3s auto-check</button>
+    <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings">Practice &middot; 2s auto-check</button>
 
     <section class="display-area" aria-live="polite">
       <div id="pi-display" class="pi-display">
@@ -145,10 +145,10 @@
 
         <div class="setting">
           <div class="setting-label">
-            Auto-check delay: <strong id="auto-seconds-label">3s</strong>
+            Auto-check delay: <strong id="auto-seconds-label">2s</strong>
             <button type="button" class="setting-reset" data-reset="auto-check" hidden aria-label="Reset auto-check delay to default">&#x2715;</button>
           </div>
-          <input type="range" id="auto-seconds" min="0" max="31" value="3" step="1">
+          <input type="range" id="auto-seconds" min="0" max="31" value="2" step="1">
         </div>
 
         <div class="setting" id="autocheck-style-setting">

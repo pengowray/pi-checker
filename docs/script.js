@@ -213,7 +213,7 @@ deriveTau();
 
 // ---- Constants ----
 const MODE_FIXED_DELAY = { competitive: 2, hardcore: 0 };
-const DEFAULT_PRACTICE_DELAY = 3;
+const DEFAULT_PRACTICE_DELAY = 2;
 const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
