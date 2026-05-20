@@ -419,6 +419,8 @@ input[type="range"]:disabled {
   margin-bottom: 1rem;
 }
 
+.keypad[hidden] { display: none; }
+
 .keypad-decimal {
   grid-template-columns: repeat(3, 1fr);
 }
@@ -429,6 +431,12 @@ input[type="range"]:disabled {
 
 .key-wide {
   grid-column: span 3;
+}
+
+/* Place E in the second column of the trailing row so E and F end up
+   centered (col 2 and col 3), leaving cols 1 and 4 of that row empty. */
+.keypad-hex .key-ef {
+  grid-column: 2;
 }
 
 .key {
