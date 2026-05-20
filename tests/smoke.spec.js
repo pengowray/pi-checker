@@ -22,7 +22,8 @@ test('loads with pi by default', async ({ page }) => {
 test('sequence dropdown lists every supported sequence', async ({ page }) => {
   const values = await page.$$eval('#sequence option', els => els.map(e => e.value));
   expect(values).toEqual([
-    'pi', 'tau', 'phi', 'sqrt2', 'pi-binary', 'pi-hex', 'primes', 'primes-spaced',
+    'pi', 'tau', 'phi', 'e', 'ln2', 'sqrt2', 'pi-binary', 'pi-hex',
+    'primes', 'primes-spaced', 'champernowne',
   ]);
 });
 
@@ -98,6 +99,62 @@ test('typed spaces actually render visibly in primes-spaced', async ({ page }) =
     return -1;
   });
   expect(spaceWidth).toBeGreaterThan(2);
+});
+
+test('e: prefix is "2." and the first digits score correct', async ({ page }) => {
+  await setSequence(page, 'e');
+  await expect(page.locator('#prefix')).toContainText('2.');
+  // e = 2.71828182845...
+  await page.keyboard.type('71828182845');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('11');
+  await expect(page.locator('#stat-wrong')).toHaveText('0');
+});
+
+test('ln 2: prefix is "0." and the first digits score correct', async ({ page }) => {
+  await setSequence(page, 'ln2');
+  await expect(page.locator('#prefix')).toContainText('0.');
+  // ln 2 = 0.69314718055...
+  await page.keyboard.type('69314718055');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('11');
+  await expect(page.locator('#stat-wrong')).toHaveText('0');
+});
+
+test('champernowne: 9→10 transition is treated as correct digits', async ({ page }) => {
+  await setSequence(page, 'champernowne');
+  await expect(page.locator('#prefix')).toContainText('0.');
+  // Champernowne = 0.12345678910111213…
+  // Typing past the 9→10 boundary catches the obvious off-by-one.
+  await page.keyboard.type('12345678910111213');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('17');
+  await expect(page.locator('#stat-wrong')).toHaveText('0');
+});
+
+test('champernowne: 99→100 boundary is correct', async ({ page }) => {
+  await setSequence(page, 'champernowne');
+  // The full sequence at index 188 (0-indexed) crosses the two-digit→three-digit
+  // boundary: ...979899100101102… A wrong digit here would be a 99→00 bug.
+  // We type just enough to cross it; verify with a wrong digit afterwards.
+  let expected = '';
+  for (let i = 1; expected.length < 195; i++) expected += i;
+  expected = expected.slice(0, 195); // covers ...979899100101…
+  await page.keyboard.type(expected);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('195');
+  await expect(page.locator('#stat-wrong')).toHaveText('0');
+});
+
+test('keypad hint reflects new sequences', async ({ page }) => {
+  await setSequence(page, 'e');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of e, Euler’s number:');
+  await setSequence(page, 'ln2');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of the natural log of 2:');
+  await setSequence(page, 'champernowne');
+  await expect(page.locator('#keypad-hint')).toHaveText(
+    'Enter digit 1 of Champernowne’s constant (0.12345678910…):'
+  );
 });
 
 test('hex keypad uses the JE600-style layout (ABCD top row, 0 bottom-right)', async ({ page }) => {
