@@ -182,3 +182,75 @@ test('skipped tile click opens the skip dialog', async ({ page }) => {
   await page.locator('#stat-skipped-tile').click();
   await expect(page.locator('#skip-modal')).toBeVisible();
 });
+
+// ---- Per-digit vs on-idle auto-check ----
+
+async function setAutoCheckSeconds(page, seconds) {
+  await page.locator('#settings-toggle').click();
+  await page.locator('#auto-seconds').evaluate((el, v) => {
+    el.value = String(v);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }, seconds);
+  await page.locator('#settings-close').click();
+}
+
+async function setAutoCheckStyle(page, value) {
+  await page.locator('#settings-toggle').click();
+  await page.locator(`input[name="autocheck-style"][value="${value}"]`).check({ force: true });
+  await page.locator('#settings-close').click();
+}
+
+async function setMode(page, value) {
+  await page.locator(`.mode-selector input[name="mode"][value="${value}"]`).check({ force: true });
+}
+
+test('auto-check style setting defaults to per-digit and is only shown in practice mode', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('#autocheck-style-setting')).toBeVisible();
+  await expect(page.locator('input[name="autocheck-style"][value="per-digit"]')).toBeChecked();
+  // Switch to hardcore — the autocheck-style block should be hidden.
+  await setMode(page, 'hardcore');
+  await expect(page.locator('#autocheck-style-setting')).toBeHidden();
+  // Back to practice — visible again.
+  await setMode(page, 'practice');
+  await expect(page.locator('#autocheck-style-setting')).toBeVisible();
+});
+
+test('per-digit: each digit checks on its own deadline (later digits stay pending)', async ({ page }) => {
+  // 1s delay so the test finishes quickly.
+  await setAutoCheckSeconds(page, 1);
+  await page.keyboard.type('1');
+  // Wait long enough for the first digit's timer to fire.
+  await page.waitForTimeout(1200);
+  // Now type more digits — they should be pending (correct color hasn't been applied).
+  await page.keyboard.type('41');
+  // The first digit ("1") has been auto-checked → has the .correct class.
+  // The two new digits are still pending.
+  const classes = await page.$$eval('#user-digits .digit', els =>
+    els.map(e => e.className)
+  );
+  expect(classes.length).toBe(3);
+  expect(classes[0]).toMatch(/\bcorrect\b/);
+  expect(classes[1]).toMatch(/\bpending\b/);
+  expect(classes[2]).toMatch(/\bpending\b/);
+});
+
+test('on-idle: timer resets on each keystroke (no digit is checked while typing continues)', async ({ page }) => {
+  await setAutoCheckStyle(page, 'on-idle');
+  await setAutoCheckSeconds(page, 1);
+  // Type a digit, wait under the threshold, type another, wait under, etc.
+  await page.keyboard.type('1');
+  await page.waitForTimeout(400);
+  await page.keyboard.type('4');
+  await page.waitForTimeout(400);
+  await page.keyboard.type('1');
+  await page.waitForTimeout(400);
+  // Total elapsed > 1s, but each gap was < 1s — nothing should be checked yet.
+  let classes = await page.$$eval('#user-digits .digit', els => els.map(e => e.className));
+  expect(classes.every(c => /\bpending\b/.test(c))).toBe(true);
+  // Now stop typing and wait past the threshold — all get checked together.
+  await page.waitForTimeout(1100);
+  classes = await page.$$eval('#user-digits .digit', els => els.map(e => e.className));
+  expect(classes.every(c => /\bpending\b/.test(c))).toBe(false);
+  expect(classes.filter(c => /\bcorrect\b/.test(c))).toHaveLength(3);
+});

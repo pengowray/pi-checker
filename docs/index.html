@@ -147,6 +147,24 @@
           <input type="range" id="auto-seconds" min="0" max="31" value="3" step="1">
         </div>
 
+        <div class="setting" id="autocheck-style-setting">
+          <div class="setting-label">
+            Auto-check timing
+            <button type="button" class="setting-reset" data-reset="autocheck-style" hidden aria-label="Reset auto-check timing to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Auto-check timing">
+            <label class="mode-option">
+              <input type="radio" name="autocheck-style" value="per-digit" checked>
+              <span>Per digit</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="autocheck-style" value="on-idle">
+              <span>On idle</span>
+            </label>
+          </div>
+          <small class="hint">Per digit: each digit is checked individually after the delay. On idle: the delay restarts on every key, so a burst is checked together.</small>
+        </div>
+
         <h3 class="settings-subhead">Display</h3>
 
         <div class="setting">

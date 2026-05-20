@@ -173,6 +173,8 @@ main {
   gap: 0.5rem;
 }
 
+.setting[hidden] { display: none; }
+
 .setting + .setting {
   margin-top: 1.1rem;
   padding-top: 1.1rem;
@@ -511,6 +513,29 @@ input[type="range"]:disabled {
   text-decoration-thickness: 2px;
 }
 .digit.pending { color: var(--pending); }
+
+/* Per-digit auto-check fill: a subtle accent panel rises from the bottom
+   of the character cell to the top over the auto-check window. Negative
+   --fill-delay lets a re-rendered digit pick up its animation at the
+   right point instead of restarting from zero. */
+.digit.auto-filling {
+  background-image: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--accent) 22%, transparent)
+  );
+  background-repeat: no-repeat;
+  background-position: bottom;
+  background-size: 100% 0%;
+  border-radius: 3px;
+  animation: digitAutoFill linear forwards;
+  animation-duration: var(--fill-duration, 0s);
+  animation-delay: var(--fill-delay, 0s);
+}
+
+@keyframes digitAutoFill {
+  to { background-size: 100% 100%; }
+}
 .digit.missed-marker {
   color: var(--missed);
   opacity: 0.65;

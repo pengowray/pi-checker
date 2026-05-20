@@ -187,10 +187,12 @@ const STORAGE_KEYS = {
   groupSize: 'pi-group-size',
   keypadFlip: 'pi-keypad-flip',
   practiceDisplay: 'pi-practice-display',
+  practiceAutoCheckStyle: 'pi-practice-autocheck-style',
 };
 
 const DEFAULT_KEYPAD_FLIP = false;
 const DEFAULT_PRACTICE_DISPLAY = 'annotations';
+const DEFAULT_AUTOCHECK_STYLE = 'per-digit'; // per-digit | on-idle
 
 const state = {
   sequenceId: 'pi',
@@ -218,6 +220,7 @@ const state = {
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
+  practiceAutoCheckStyle: DEFAULT_AUTOCHECK_STYLE,
   compTimerHidden: false,
 };
 
@@ -252,6 +255,8 @@ const keypadHintEl = document.getElementById('keypad-hint');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
+const autoCheckStyleInputs = document.querySelectorAll('input[name="autocheck-style"]');
+const autoCheckStyleSetting = document.getElementById('autocheck-style-setting');
 const resetBtns = document.querySelectorAll('.setting-reset');
 const skippedTile = document.getElementById('stat-skipped-tile');
 const skipModal = document.getElementById('skip-modal');
@@ -315,6 +320,18 @@ practiceDisplayInputs.forEach(input => {
     state.practiceDisplay = input.value;
     localStorage.setItem(STORAGE_KEYS.practiceDisplay, input.value);
     updateResetVisibility();
+    render();
+  });
+});
+
+// ---- Auto-check style (per-digit vs on-idle) ----
+autoCheckStyleInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    state.practiceAutoCheckStyle = input.value;
+    localStorage.setItem(STORAGE_KEYS.practiceAutoCheckStyle, input.value);
+    updateResetVisibility();
+    refreshAutoCheckScheduling();
     render();
   });
 });
@@ -415,7 +432,15 @@ autoSecondsInput.addEventListener('input', () => {
   renderDelayLabel();
   updateModeBadge();
   updateResetVisibility();
-  if (hasPending()) resetAutoCheckTimer();
+  if (hasPending()) {
+    if (useOnIdleAutoCheck()) {
+      resetAutoCheckTimer();
+    } else {
+      cancelAllPerDigitTimers();
+      schedulePerDigitForAllPending();
+      render();
+    }
+  }
 });
 
 function isManual() {
@@ -504,6 +529,7 @@ function clearSession() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  cancelAllPerDigitTimers();
   stopCheckBar();
   state.entries = [];
   state.startTime = null;
@@ -529,6 +555,7 @@ function applyModeDefaults() {
   autoSecondsInput.value = state.autoCheckSeconds;
   renderDelayLabel();
   updateModeBadge();
+  refreshAutoCheckScheduling();
 }
 
 function updateModeBadge() {
@@ -587,6 +614,7 @@ function endCompetitive() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  cancelAllPerDigitTimers();
   stopCheckBar();
   markAllChecked();
   render();
@@ -601,6 +629,7 @@ function endHardcore() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  cancelAllPerDigitTimers();
   stopCheckBar();
   markAllChecked();
   render();
@@ -674,7 +703,7 @@ function inputDigit(d) {
   }
 
   const t = performance.now() - state.startTime;
-  state.entries.push({
+  const entry = {
     char: d,
     t: t,
     skipped: false,
@@ -682,9 +711,16 @@ function inputDigit(d) {
     status: 'pending',
     expected: null,
     missedBefore: [],
-  });
+    autoCheckStartedAt: null,
+    _timerId: null,
+  };
+  state.entries.push(entry);
   computeStatuses();
-  resetAutoCheckTimer();
+  if (useOnIdleAutoCheck()) {
+    resetAutoCheckTimer();
+  } else {
+    schedulePerDigitTimer(entry);
+  }
   checkHardcoreFail();
   render();
 }
@@ -712,6 +748,7 @@ function inputPaste(text) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  cancelAllPerDigitTimers();
   markAllChecked();
 
   // Skip the leading integer part if the paste opens with it
@@ -772,10 +809,16 @@ function backspace() {
     state.erasedPreCheck += 1;
   }
 
-  state.entries.pop();
+  const popped = state.entries.pop();
+  if (popped && popped._timerId) {
+    clearTimeout(popped._timerId);
+    popped._timerId = null;
+  }
   if (state.entries.length === 0) state.integerCharsConsumed = 0;
   computeStatuses();
-  resetAutoCheckTimer();
+  if (useOnIdleAutoCheck()) {
+    resetAutoCheckTimer();
+  }
   render();
 }
 
@@ -785,6 +828,7 @@ function forceCheck() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  cancelAllPerDigitTimers();
   stopCheckBar();
   markAllChecked();
   render();
@@ -792,6 +836,10 @@ function forceCheck() {
 
 function hasPending() {
   return state.entries.some(e => !e.checked);
+}
+
+function useOnIdleAutoCheck() {
+  return state.mode === 'practice' && state.practiceAutoCheckStyle === 'on-idle';
 }
 
 function resetAutoCheckTimer() {
@@ -814,6 +862,53 @@ function resetAutoCheckTimer() {
       markAllChecked();
       render();
     }, ms);
+  }
+}
+
+function schedulePerDigitTimer(entry) {
+  if (entry.checked) return;
+  if (isManual()) return;
+  const ms = state.autoCheckSeconds * 1000;
+  if (ms <= 0) {
+    entry.checked = true;
+    return;
+  }
+  entry.autoCheckStartedAt = performance.now();
+  entry._timerId = setTimeout(() => {
+    entry._timerId = null;
+    entry.checked = true;
+    render();
+  }, ms);
+}
+
+function schedulePerDigitForAllPending() {
+  for (const e of state.entries) {
+    if (!e.checked) schedulePerDigitTimer(e);
+  }
+}
+
+function cancelAllPerDigitTimers() {
+  for (const e of state.entries) {
+    if (e._timerId) {
+      clearTimeout(e._timerId);
+      e._timerId = null;
+    }
+    e.autoCheckStartedAt = null;
+  }
+}
+
+function refreshAutoCheckScheduling() {
+  if (state.autoCheckTimer) {
+    clearTimeout(state.autoCheckTimer);
+    state.autoCheckTimer = null;
+  }
+  cancelAllPerDigitTimers();
+  stopCheckBar();
+  if (!hasPending()) return;
+  if (useOnIdleAutoCheck()) {
+    resetAutoCheckTimer();
+  } else {
+    schedulePerDigitForAllPending();
   }
 }
 
@@ -1017,6 +1112,13 @@ function render() {
     } else {
       const span = document.createElement('span');
       span.className = 'digit pending';
+      if (e.autoCheckStartedAt != null && state.autoCheckSeconds > 0 && !isManual()) {
+        span.classList.add('auto-filling');
+        const totalMs = state.autoCheckSeconds * 1000;
+        const elapsed = Math.max(0, performance.now() - e.autoCheckStartedAt);
+        span.style.setProperty('--fill-duration', totalMs + 'ms');
+        span.style.setProperty('--fill-delay', `-${elapsed}ms`);
+      }
       setCharText(span, e.char);
       appendItem(span);
       seqPos = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
@@ -1126,6 +1228,7 @@ function updateUI() {
   modeInputs.forEach(input => { input.checked = input.value === state.mode; });
   modeInputs.forEach(input => { input.disabled = false; input.parentElement.title = ''; });
   autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || state.gameLocked;
+  if (autoCheckStyleSetting) autoCheckStyleSetting.hidden = state.mode !== 'practice';
 
   // Digit keys: disable if locked OR character not in current alphabet
   allDigitBtns.forEach(btn => {
@@ -1304,6 +1407,14 @@ resetBtns.forEach(btn => {
       localStorage.setItem(STORAGE_KEYS.practiceDisplay, DEFAULT_PRACTICE_DISPLAY);
       updateResetVisibility();
       render();
+    } else if (target === 'autocheck-style') {
+      state.practiceAutoCheckStyle = DEFAULT_AUTOCHECK_STYLE;
+      const radio = document.querySelector(`input[name="autocheck-style"][value="${DEFAULT_AUTOCHECK_STYLE}"]`);
+      if (radio) radio.checked = true;
+      localStorage.setItem(STORAGE_KEYS.practiceAutoCheckStyle, DEFAULT_AUTOCHECK_STYLE);
+      updateResetVisibility();
+      refreshAutoCheckScheduling();
+      render();
     }
   });
 });
@@ -1317,6 +1428,7 @@ function updateResetVisibility() {
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
     else if (target === 'practice-display') isDefault = state.practiceDisplay === DEFAULT_PRACTICE_DISPLAY;
+    else if (target === 'autocheck-style') isDefault = state.practiceAutoCheckStyle === DEFAULT_AUTOCHECK_STYLE;
     btn.hidden = isDefault;
   });
 }
@@ -1432,6 +1544,12 @@ function loadPersistedSettings() {
   if (savedPracticeDisplay === 'oneline' || savedPracticeDisplay === 'annotations') {
     state.practiceDisplay = savedPracticeDisplay;
     const radio = document.querySelector(`input[name="practice-display"][value="${savedPracticeDisplay}"]`);
+    if (radio) radio.checked = true;
+  }
+  const savedAutoCheckStyle = localStorage.getItem(STORAGE_KEYS.practiceAutoCheckStyle);
+  if (savedAutoCheckStyle === 'per-digit' || savedAutoCheckStyle === 'on-idle') {
+    state.practiceAutoCheckStyle = savedAutoCheckStyle;
+    const radio = document.querySelector(`input[name="autocheck-style"][value="${savedAutoCheckStyle}"]`);
     if (radio) radio.checked = true;
   }
 }
