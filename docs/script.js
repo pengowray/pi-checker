@@ -36,12 +36,14 @@ const state = {
   gameLocked: false,
   competitiveEnded: false,
   competitiveFrozenAt: 0, // seconds elapsed when the comp session ended
+  groupSize: 0, // 0 = off; otherwise 2..7
 };
 
 // ---- DOM refs ----
 const userDigitsEl = document.getElementById('user-digits');
 const autoSecondsInput = document.getElementById('auto-seconds');
 const autoSecondsLabel = document.getElementById('auto-seconds-label');
+const groupSizeSelect = document.getElementById('group-size');
 const modeInputs = document.querySelectorAll('input[name="mode"]');
 const themeToggle = document.getElementById('theme-toggle');
 const settingsToggle = document.getElementById('settings-toggle');
@@ -73,6 +75,11 @@ function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   themeToggle.textContent = theme === 'dark' ? '☀️' : '\u{1F319}';
 }
+groupSizeSelect.addEventListener('change', () => {
+  state.groupSize = parseInt(groupSizeSelect.value, 10) || 0;
+  render();
+});
+
 themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
@@ -402,15 +409,23 @@ function computeStatuses() {
 function render() {
   const frag = document.createDocumentFragment();
   let correct = 0, wrong = 0, skipped = 0, pasted = 0;
+  let pos = 0; // count of rendered digit spans, for group boundaries
+
+  function tagGroup(span) {
+    if (state.groupSize > 0 && pos > 0 && pos % state.groupSize === 0) {
+      span.classList.add('group-start');
+    }
+    pos += 1;
+  }
 
   for (const e of state.entries) {
     if (e.checked) {
-      // Show skipped pi digits before this entry as small markers
       for (const s of e.skippedBefore) {
         const span = document.createElement('span');
         span.className = 'digit skipped-marker';
         span.textContent = s;
         span.title = 'skipped digit';
+        tagGroup(span);
         frag.appendChild(span);
         skipped += 1;
       }
@@ -424,6 +439,7 @@ function render() {
       } else if (e.pasted) {
         span.title = 'pasted';
       }
+      tagGroup(span);
       frag.appendChild(span);
       if (e.status === 'correct') {
         if (e.pasted) pasted += 1;
@@ -435,6 +451,7 @@ function render() {
       const span = document.createElement('span');
       span.className = 'digit pending';
       span.textContent = e.char;
+      tagGroup(span);
       frag.appendChild(span);
     }
   }
