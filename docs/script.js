@@ -315,13 +315,15 @@ function initTheme() {
   const saved = localStorage.getItem(STORAGE_KEYS.theme);
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const theme = saved || (prefersDark ? 'dark' : 'light');
-  setTheme(theme);
+  // Only persist when the user explicitly chose; otherwise we'd freeze the
+  // first-detected system preference and ignore later OS theme changes.
+  setTheme(theme, !!saved);
 }
-function setTheme(theme) {
+function setTheme(theme, persist = true) {
   document.documentElement.setAttribute('data-theme', theme);
   themeToggle.textContent = theme === 'dark' ? '☀️' : '\u{1F319}';
   themeInputs.forEach(input => { input.checked = input.value === theme; });
-  localStorage.setItem(STORAGE_KEYS.theme, theme);
+  if (persist) localStorage.setItem(STORAGE_KEYS.theme, theme);
 }
 themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
@@ -776,10 +778,12 @@ function inputPaste(text) {
   const upper = text.toUpperCase();
   const digits = [];
   // Track the previous char so we can collapse consecutive spaces in the
-  // pasted text (mirroring how live typing ignores double-spaces).
+  // pasted text (mirroring how live typing ignores double-spaces). Seed with
+  // ' ' when there are no entries yet so a leading space in the paste gets
+  // dropped, matching inputDigit's rejection of a leading space.
   let prevChar = state.entries.length > 0
     ? state.entries[state.entries.length - 1].char
-    : '';
+    : ' ';
   for (const c of upper) {
     if (!state.alphabet.includes(c)) continue;
     if (c === ' ' && prevChar === ' ') continue;
@@ -1211,7 +1215,6 @@ function tickTime() {
       const elapsedNow = (performance.now() - state.startTime) / 1000;
       if (elapsedNow >= COMPETITIVE_LIMIT_SECONDS) {
         endCompetitive();
-        updateUI();
       }
     }
 
@@ -1410,9 +1413,10 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('paste', (e) => {
-  const cd = e.clipboardData || window.clipboardData;
-  if (!cd) return;
-  const text = cd.getData('text');
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (!e.clipboardData) return;
+  const text = e.clipboardData.getData('text');
   if (!text) return;
   e.preventDefault();
   inputPaste(text);
