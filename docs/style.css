@@ -957,6 +957,33 @@ input[type="range"]:disabled {
   .pi-display { font-size: 1.05rem; }
 }
 
+/* Tight vertical viewports (zoomed-in desktop, short windows): trim the
+   header, footer, and section gaps so the pi display keeps at least two
+   or three lines before squishing. Covers the range above the landscape
+   breakpoint where the standard layout otherwise starves the display. */
+@media (max-height: 820px) {
+  header { padding: 0.55rem 1.2rem; }
+  .subtitle { display: none; }
+  .header-actions button { padding: 0.35rem 0.6rem; font-size: 1rem; min-width: 2.1rem; }
+  .mode-badge { margin-bottom: 0.4rem; }
+  .display-area { margin-bottom: 0.55rem; }
+  .stats { margin-bottom: 0.55rem; }
+  .keypad { margin-bottom: 0.55rem; }
+  .actions { margin-bottom: 0.45rem; }
+  .foot { padding: 0.35rem 0 0.5rem; font-size: 0.75rem; }
+}
+
+@media (max-height: 720px) {
+  header { padding: 0.4rem 1.2rem; }
+  header h1 { font-size: 1.2rem; }
+  .stats > div { padding: 0.4rem 0.35rem; }
+  .stat-value { font-size: 1.1rem; }
+  .keypad-hint { margin-bottom: 0.25rem; font-size: 0.78rem; }
+  .keypad { gap: 0.4rem; margin-bottom: 0.45rem; }
+  .key { min-height: 52px; padding: 0.6rem 0; font-size: 1.4rem; }
+  .foot { display: none; }
+}
+
 /* Landscape on short viewports (mobile rotated, small windows): keypad
    moves to the right column, everything else stacks in the left column;
    actions span the full width below. The footer hint and the header
