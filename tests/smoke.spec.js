@@ -43,23 +43,29 @@ test('tau prefix is "6." and the digits match 2π', async ({ page }) => {
   await expect(page.locator('#stat-wrong')).toHaveText('0');
 });
 
-test('primes hides the prefix and shows a visual space at each prime boundary', async ({ page }) => {
+test('primes shows "2 " as the prefix and a visual space at each prime boundary', async ({ page }) => {
   await setSequence(page,'primes');
-  await expect(page.locator('#prefix')).toBeHidden();
-  // First four primes: 2 3 5 7 → four boundaries (one after each digit)
+  // The first prime (2) lives in the prefix, analogous to "3." for pi.
+  const prefixText = await page.locator('#prefix').evaluate(el => el.textContent);
+  expect(prefixText).toBe('2 ');
+  // Type 2357: leading "2" is silently absorbed by the prefix; "3","5","7"
+  // become three correct entries, with one prime-space marker after each.
   await page.keyboard.type('2357');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('4');
-  await expect(page.locator('#user-digits .prime-space')).toHaveCount(4);
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await expect(page.locator('#user-digits .prime-space')).toHaveCount(3);
 });
 
-test('primes-spaced shows the space key and matches with literal spaces', async ({ page }) => {
+test('primes-spaced shows the space key and absorbs "2 " into the prefix', async ({ page }) => {
   await setSequence(page,'primes-spaced');
   await expect(page.locator('.key-space')).toBeVisible();
-  // First four primes typed with single spaces between them.
+  const prefixText = await page.locator('#prefix').evaluate(el => el.textContent);
+  expect(prefixText).toBe('2 ');
+  // Typing the first four primes with single spaces: the leading "2 " gets
+  // absorbed by the prefix, leaving "3 5 7" → 5 entries (digits + spaces).
   await page.keyboard.type('2 3 5 7');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('7');
+  await expect(page.locator('#stat-correct')).toHaveText('5');
   await expect(page.locator('#stat-wrong')).toHaveText('0');
 });
 
@@ -69,15 +75,15 @@ test('primes-spaced collapses double-spaces and ignores a leading space', async 
   // as if the user typed "2 3 5 7" (one space each, no leading space).
   await page.keyboard.type(' 2 3 5   7');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('7');
+  await expect(page.locator('#stat-correct')).toHaveText('5');
   await expect(page.locator('#stat-wrong')).toHaveText('0');
 });
 
 test('typed spaces actually render visibly in primes-spaced', async ({ page }) => {
   await setSequence(page,'primes-spaced');
-  await page.keyboard.type('2 3');
+  // "2 " is absorbed by the prefix; typing "2 3 5" leaves "3"," ","5" → 3 entries.
+  await page.keyboard.type('2 3 5');
   await page.keyboard.press('Enter');
-  // Each digit entry is its own .digit span — count should be 3 (two digits + one space).
   await expect(page.locator('#user-digits > .digit, #user-digits .group > .digit')).toHaveCount(3);
   // The space entry should have a positive rendered width (catches the
   // earlier regression where a plain " " collapsed to zero width).
@@ -156,6 +162,20 @@ test('keypad hint uses a verbose label per sequence', async ({ page }) => {
   await page.keyboard.type('41421');
   await page.keyboard.press('Enter');
   await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 6 of the square root of 2:');
+});
+
+test('Ctrl/Cmd/Alt modifiers do not count as digit input (e.g. Ctrl+C in hex)', async ({ page }) => {
+  await setSequence(page, 'pi-hex');
+  // Ctrl+C would otherwise be uppercased to "C" and swallowed as a hex digit.
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Alt+f');
+  await expect(page.locator('#stat-correct')).toHaveText('0');
+  await expect(page.locator('#stat-wrong')).toHaveText('0');
+  // Plain typing still works.
+  await page.keyboard.type('243F');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('4');
 });
 
 test('skipped tile click opens the skip dialog', async ({ page }) => {

@@ -89,7 +89,10 @@ const SEQUENCES = {
     shortLabel: 'primes',
     hintLabel: 'the list of primes',
     titleHtml: 'Primes',
-    integerPart: '',
+    integerPart: '2',
+    // "2 " (NBSP) so the trailing space renders reliably across browsers
+    // — analogous to "3." for pi: the first prime sits in the prefix.
+    prefix: '2 ',
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',          // filled by setupPrimes()
@@ -101,7 +104,10 @@ const SEQUENCES = {
     shortLabel: 'primes',
     hintLabel: 'the list of primes, including spaces',
     titleHtml: 'Primes',
-    integerPart: '',
+    // The "2 " (with a real space) gets silently absorbed when typed, so the
+    // user starts entering at "3".
+    integerPart: '2 ',
+    prefix: '2 ',
     alphabet: '0123456789 ',
     keypadType: 'decimal',
     digits: '',
@@ -155,15 +161,16 @@ deriveTau();
   const boundaries = new Set();
   let pos = 0;
   let joined = '';
-  for (const p of primes) {
-    const s = String(p);
+  // Skip primes[0] (=2) — it now lives in the integerPart as the visual prefix.
+  for (let k = 1; k < primes.length; k++) {
+    const s = String(primes[k]);
     joined += s;
     pos += s.length;
     boundaries.add(pos);
   }
   SEQUENCES.primes.digits = joined;
   SEQUENCES.primes.primeBoundaries = boundaries;
-  SEQUENCES['primes-spaced'].digits = primes.join(' ');
+  SEQUENCES['primes-spaced'].digits = primes.slice(1).join(' ');
 })();
 
 // ---- Constants ----
@@ -355,8 +362,11 @@ function applySequence(id) {
   state.alphabet = def.alphabet;
   state.keypadType = def.keypadType;
   state.integerCharsConsumed = 0;
-  prefixEl.textContent = def.integerPart ? def.integerPart + '.' : '';
-  prefixEl.hidden = !def.integerPart;
+  const prefixText = def.prefix != null
+    ? def.prefix
+    : (def.integerPart ? def.integerPart + '.' : '');
+  prefixEl.textContent = prefixText;
+  prefixEl.hidden = !prefixText;
   appTitleEl.innerHTML = def.titleHtml;
   // Swap keypad layout
   keypadDecimal.hidden = def.keypadType !== 'decimal';
@@ -637,6 +647,17 @@ function inputDigit(d) {
   d = d.toUpperCase();
   if (!state.alphabet.includes(d)) return;
 
+  // Silently absorb leading integer-part chars (e.g. user types "3" first
+  // when "3." is already displayed; "1" then "1" for pi-binary; "2" then a
+  // space for primes-spaced). Must come before the leading-space rejection
+  // so primes-spaced can absorb the space after the leading "2".
+  if (state.entries.length === 0 && state.integerCharsConsumed < state.integerPart.length) {
+    if (d === state.integerPart[state.integerCharsConsumed]) {
+      state.integerCharsConsumed += 1;
+      return;
+    }
+  }
+
   // Collapse consecutive spaces: a second space in a row is silently ignored
   // so users don't get penalised for double-tapping the space bar.
   if (d === ' ') {
@@ -646,15 +667,6 @@ function inputDigit(d) {
   }
 
   practiceResume();
-
-  // Silently absorb leading integer-part chars (e.g. user types "3" first
-  // when "3." is already displayed; or "1" then "1" for pi-binary).
-  if (state.entries.length === 0 && state.integerCharsConsumed < state.integerPart.length) {
-    if (d === state.integerPart[state.integerCharsConsumed]) {
-      state.integerCharsConsumed += 1;
-      return;
-    }
-  }
 
   if (state.startTime === null) {
     state.startTime = performance.now();
@@ -1205,7 +1217,10 @@ document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
-  if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) return;
+  // Let the browser handle Ctrl/Cmd/Alt combos (copy, paste, select-all,
+  // browser shortcuts). Without this we'd swallow Ctrl+C as "C" in hex mode,
+  // Ctrl+A as "A", etc. Shift is fine — keys get uppercased anyway.
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   if (!settingsModal.hidden) {
     if (e.key === 'Escape') {
@@ -1225,7 +1240,7 @@ document.addEventListener('keydown', (e) => {
 
   // "V" skips the next sequence digit. Practice: any time;
   // Competitive/Hardcore: only before the clock starts.
-  if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey) {
+  if (e.key === 'v' || e.key === 'V') {
     skipNextDigit();
     e.preventDefault();
     return;
