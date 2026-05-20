@@ -446,7 +446,8 @@ input[type="range"]:disabled {
   word-break: normal;
 }
 
-.pi-display.grouped .digit.group-end {
+.pi-display.grouped .group {
+  display: inline-block;
   margin-right: 0.55ch;
 }
 

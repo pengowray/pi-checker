@@ -1093,6 +1093,11 @@ function computeStatuses(fromIdx = 0) {
 // <span class="group">. Missed markers no longer count toward group
 // position, so group widths stay uniform.
 let renderCache = [];
+// When gs > 0, entries are placed inside a per-group <span class="group">
+// wrapper so a group never line-breaks mid-pair. Wrappers are created
+// lazily and shared across renders; only the entry's own nodes are
+// touched on incremental updates.
+let groupElements = [];
 let lastRenderContextKey = '';
 
 // A literal " " inside an inline-block can collapse to near-zero width in
@@ -1107,7 +1112,7 @@ function setCharText(el, char) {
   }
 }
 
-function buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter) {
+function buildEntryNodes(e, ctx, hasPrimeAfter) {
   const nodes = [];
   if (e.checked) {
     for (const s of e.missedBefore) {
@@ -1160,7 +1165,6 @@ function buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter) {
     }
     setCharText(main, e.char);
   }
-  if (isGroupEnd) main.classList.add('group-end');
   nodes.push(main);
   if (hasPrimeAfter) {
     const ps = document.createElement('span');
@@ -1171,21 +1175,19 @@ function buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter) {
   return nodes;
 }
 
-function computeEntryFingerprint(e, ctx, isGroupEnd, hasPrimeAfter) {
+function computeEntryFingerprint(e, ctx, hasPrimeAfter) {
   // Pending entries only depend on char + auto-fill animation state. The
   // started-at timestamp is floored so a same-frame re-render doesn't
   // replace the node (which would restart the CSS animation).
   if (!e.checked) {
     const t = e.autoCheckStartedAt != null ? Math.floor(e.autoCheckStartedAt) : '';
     return 'p|' + e.char + '|' + t + '|' + ctx.autoCheckSeconds + '|' +
-      (ctx.isManual ? 1 : 0) + '|' +
-      (isGroupEnd ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
+      (ctx.isManual ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
   }
   return 'c|' + e.char + '|' + e.status + '|' + (e.expected || '') + '|' +
     (e.skipped ? 1 : 0) + '|' + e.missedBefore.join(',') + '|' +
     (ctx.inComp ? 1 : 0) + '|' + (ctx.competitiveEnded ? 1 : 0) + '|' +
-    (ctx.inPracticeAnnot ? 1 : 0) + '|' +
-    (isGroupEnd ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
+    (ctx.inPracticeAnnot ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
 }
 
 function render() {
@@ -1208,6 +1210,7 @@ function render() {
   const ctxKey = state.sequenceId + '|' + gs + '|' + (primeBoundaries ? '1' : '0');
   if (lastRenderContextKey !== ctxKey) {
     renderCache = [];
+    groupElements = [];
     userDigitsEl.replaceChildren();
     lastRenderContextKey = ctxKey;
   }
@@ -1216,25 +1219,39 @@ function render() {
   let correct = 0, wrong = 0, missed = 0, skipped = 0;
   let seqPos = 0;
 
+  // Returns the parent node to which entry i's DOM should be appended /
+  // inserted into. Creates the per-group wrapper on first reference.
+  function parentForEntry(i) {
+    if (gs <= 0) return userDigitsEl;
+    const gIdx = Math.floor(i / gs);
+    let wrap = groupElements[gIdx];
+    if (!wrap) {
+      wrap = document.createElement('span');
+      wrap.className = 'group';
+      userDigitsEl.appendChild(wrap);
+      groupElements[gIdx] = wrap;
+    }
+    return wrap;
+  }
+
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const seqAfter = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
-    const isGroupEnd = gs > 0 && ((i + 1) % gs === 0);
     const hasPrimeAfter = !!(primeBoundaries && primeBoundaries.has(seqAfter));
-    const fp = computeEntryFingerprint(e, ctx, isGroupEnd, hasPrimeAfter);
+    const fp = computeEntryFingerprint(e, ctx, hasPrimeAfter);
 
     if (i >= renderCache.length) {
-      const nodes = buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter);
+      const nodes = buildEntryNodes(e, ctx, hasPrimeAfter);
       const frag = document.createDocumentFragment();
       for (const n of nodes) frag.appendChild(n);
-      userDigitsEl.appendChild(frag);
+      parentForEntry(i).appendChild(frag);
       renderCache.push({ fp, nodes });
     } else if (renderCache[i].fp !== fp) {
       const old = renderCache[i];
-      const newNodes = buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter);
+      const newNodes = buildEntryNodes(e, ctx, hasPrimeAfter);
       const frag = document.createDocumentFragment();
       for (const n of newNodes) frag.appendChild(n);
-      userDigitsEl.insertBefore(frag, old.nodes[0]);
+      old.nodes[0].parentNode.insertBefore(frag, old.nodes[0]);
       for (const n of old.nodes) n.remove();
       renderCache[i] = { fp, nodes: newNodes };
     }
@@ -1255,6 +1272,14 @@ function render() {
   while (renderCache.length > entries.length) {
     const c = renderCache.pop();
     for (const n of c.nodes) n.remove();
+  }
+  // Drop now-empty group wrappers from the tail.
+  if (gs > 0) {
+    const lastGroupIdx = entries.length > 0 ? Math.floor((entries.length - 1) / gs) : -1;
+    for (let k = groupElements.length - 1; k > lastGroupIdx; k--) {
+      if (groupElements[k]) groupElements[k].remove();
+    }
+    groupElements.length = lastGroupIdx + 1;
   }
 
   piDisplayEl.classList.toggle('grouped', gs > 0);
