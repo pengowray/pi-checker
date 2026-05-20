@@ -81,7 +81,7 @@ const DEFAULT_PRACTICE_DELAY = 3;
 const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
-const COMPETITIVE_LIMIT_SECONDS = 10 * 60;
+const COMPETITIVE_LIMIT_SECONDS = 15 * 60;
 
 const STORAGE_KEYS = {
   theme: 'pi-theme',
@@ -376,7 +376,7 @@ function updateModeBadge() {
 function updateModeHint() {
   const hints = {
     practice: 'Type or paste digits. Backspace removes recent input.',
-    competitive: '2s auto-check, 10 minute limit, wrong digits stay locked. Reset is required to start.',
+    competitive: '2s auto-check, 15 minute limit, wrong digits stay locked. Reset is required to start.',
     hardcore: 'Instant lock-in, no backspace. One wrong digit ends the run. Reset is required to start.',
   };
   modeHint.textContent = hints[state.mode] || '';
