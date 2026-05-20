@@ -114,6 +114,7 @@ const state = {
   practicePaused: false,
   practicePauseDisplayedAt: 0,
   erasedErrors: 0,
+  erasedPreCheck: 0, // wrong digits erased before they were checked; not displayed yet
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   compTimerHidden: false,
@@ -349,6 +350,7 @@ function clearSession() {
   state.practicePaused = false;
   state.practicePauseDisplayedAt = 0;
   state.erasedErrors = 0;
+  state.erasedPreCheck = 0;
   state.integerCharsConsumed = 0;
   state.compTimerHidden = false;
 }
@@ -564,7 +566,23 @@ function backspace() {
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
   if (state.mode === 'competitive' && last.checked && last.status === 'wrong') return;
-  if (last.status === 'wrong') state.erasedErrors += 1;
+
+  // Displayed "Erased" counter: only the errors the user actually saw.
+  // (1) checked wrong = was shown red, OR
+  // (2) checked skip-confirming digit that wouldn't be correct at its
+  //     literal position (erasing it unwinds the prior skip)
+  if (last.checked) {
+    if (last.status === 'wrong') {
+      state.erasedErrors += 1;
+    } else if (last.skipConfirms && !last.correctNoSkip) {
+      state.erasedErrors += 1;
+    }
+  } else if (last.status === 'wrong') {
+    // Tracked separately (not displayed yet) so we can show pre-check
+    // erasures in stats later on.
+    state.erasedPreCheck += 1;
+  }
+
   state.entries.pop();
   if (state.entries.length === 0) state.integerCharsConsumed = 0;
   computeStatuses();
@@ -636,9 +654,11 @@ function computeStatuses() {
   const digits = state.digits;
   let seqIdx = 0;
 
+  // Skip-aware walk
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     e.skippedBefore = [];
+    e.skipConfirms = false;
 
     if (seqIdx >= digits.length) {
       e.status = 'wrong';
@@ -677,6 +697,24 @@ function computeStatuses() {
       e.expected = digits[seqIdx];
       seqIdx += 1;
     }
+  }
+
+  // Mark the next two entries after each skip as the skip's "confirming"
+  // digits. Deleting one of these unwinds the skip and so should count as
+  // erasing an error, unless the digit would have been correct at its
+  // literal position anyway (the correctNoSkip check below).
+  for (let i = 0; i < entries.length; i++) {
+    if (entries[i].skippedBefore && entries[i].skippedBefore.length > 0) {
+      if (entries[i + 1]) entries[i + 1].skipConfirms = true;
+      if (entries[i + 2]) entries[i + 2].skipConfirms = true;
+    }
+  }
+
+  // No-skip walk: would this entry be correct at its literal position
+  // (one pi digit per typed digit, no skipping)?
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    e.correctNoSkip = i < digits.length && e.char === digits[i];
   }
 }
 
