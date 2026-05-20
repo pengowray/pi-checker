@@ -252,15 +252,17 @@ skipToInput.addEventListener('keydown', (e) => {
   }
 });
 
-// ---- Paste next digit (V key in comp/hardcore before clock starts) ----
+// ---- Paste next digit (V key) ----
+// Practice: works any time. Competitive/Hardcore: only before the clock starts.
 function pasteNextDigit() {
-  if (state.mode !== 'competitive' && state.mode !== 'hardcore') return;
-  if (state.startTime !== null) return;
+  if (isInputLocked()) return;
   if (state.entries.length >= state.digits.length) return;
+  if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime !== null) return;
   const d = state.digits[state.entries.length];
+  const t = state.startTime === null ? null : (performance.now() - state.startTime);
   state.entries.push({
     char: d,
-    t: null,
+    t: t,
     pasted: true,
     checked: true,
     status: 'pending',
@@ -1071,13 +1073,12 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // "V" pastes the next sequence digit (comp/hardcore, before clock starts)
+  // "V" pastes the next sequence digit. Practice: any time;
+  // Competitive/Hardcore: only before the clock starts.
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey) {
-    if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime === null) {
-      pasteNextDigit();
-      e.preventDefault();
-      return;
-    }
+    pasteNextDigit();
+    e.preventDefault();
+    return;
   }
 
   const k = e.key.toUpperCase();
