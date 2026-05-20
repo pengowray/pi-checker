@@ -739,7 +739,12 @@ function render() {
 
   userDigitsEl.replaceChildren(frag);
   piDisplayEl.classList.toggle('grouped', gs > 0);
-  piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
+  // Defer to next frame so the new content is laid out before we measure
+  // and scroll to the bottom; without this the scrollHeight reading can
+  // lag a frame behind on some browsers.
+  requestAnimationFrame(() => {
+    piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
+  });
 
   statCorrect.textContent = correct;
   statWrong.textContent = wrong;

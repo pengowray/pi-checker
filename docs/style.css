@@ -390,6 +390,16 @@ input[type="range"]:disabled {
   box-shadow: var(--shadow);
   overflow-y: auto;
   display: flex;
+  flex-direction: column;
+}
+
+/* Bottom-anchored content via margin-top: auto. When the row is shorter
+   than the display, it sits at the bottom (cursor near keypad). As it
+   grows, the top edge moves up until the row fills the display, after
+   which the row overflows and pi-display scrolls. */
+.pi-display .pi-row {
+  margin-top: auto;
+  display: flex;
   align-items: flex-start;
 }
 
