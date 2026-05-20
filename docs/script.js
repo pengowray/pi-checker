@@ -265,6 +265,7 @@ function clearSession() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  stopCheckBar();
   state.entries = [];
   state.startTime = null;
   state.gameLocked = false;
@@ -332,6 +333,7 @@ function endCompetitive() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  stopCheckBar();
   markAllChecked();
   render();
 }
@@ -461,6 +463,7 @@ function forceCheck() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  stopCheckBar();
   markAllChecked();
   render();
 }
@@ -474,6 +477,7 @@ function resetAutoCheckTimer() {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
+  stopCheckBar();
   if (!hasPending()) return;
   if (isManual()) return;
 
@@ -481,12 +485,30 @@ function resetAutoCheckTimer() {
   if (ms <= 0) {
     markAllChecked();
   } else {
+    startCheckBar(ms);
     state.autoCheckTimer = setTimeout(() => {
       state.autoCheckTimer = null;
+      stopCheckBar();
       markAllChecked();
       render();
     }, ms);
   }
+}
+
+function startCheckBar(ms) {
+  allCheckBtns.forEach(btn => {
+    btn.classList.remove('filling');
+    void btn.offsetWidth; // restart animation by forcing reflow
+    btn.style.setProperty('--fill-duration', ms + 'ms');
+    btn.classList.add('filling');
+  });
+}
+
+function stopCheckBar() {
+  allCheckBtns.forEach(btn => {
+    btn.classList.remove('filling');
+    btn.style.removeProperty('--fill-duration');
+  });
 }
 
 function markAllChecked() {

@@ -468,9 +468,32 @@ input[type="range"]:disabled {
   background: var(--correct);
   border-color: var(--correct);
   color: white;
+  position: relative;
+  overflow: hidden;
 }
 .key-check:hover:not(:disabled) { filter: brightness(1.08); background: var(--correct); }
 .key-check:disabled { background: var(--correct); }
+
+.key-check::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 0;
+  background: rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+.key-check.filling::after {
+  animation: keyCheckFill linear forwards;
+  animation-duration: var(--fill-duration, 0s);
+}
+
+@keyframes keyCheckFill {
+  from { width: 0; }
+  to { width: 100%; }
+}
 
 .key-back {
   background: var(--key-bg);
