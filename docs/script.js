@@ -355,6 +355,10 @@ function applySequence(id) {
   keypadHex.hidden = def.keypadType !== 'hex';
   // Show the space key only when the alphabet uses spaces.
   keypadDecimal.classList.toggle('with-space', def.alphabet.includes(' '));
+  // Keep the settings dropdown in sync — browsers restore form values
+  // across reloads, so without this the select can show a stale
+  // sequence when the app actually re-initialised back to the default.
+  if (sequenceSelect.value !== id) sequenceSelect.value = id;
 }
 
 sequenceSelect.addEventListener('change', () => {

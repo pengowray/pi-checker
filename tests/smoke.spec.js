@@ -129,6 +129,19 @@ test('hex keypad uses the JE600-style layout (ABCD top row, 0 bottom-right)', as
   ]);
 });
 
+test('sequence dropdown stays in sync with state after reload', async ({ page }) => {
+  // Pick a non-default sequence, then reload — the app intentionally
+  // doesn't persist sequence choice, so it should come back as pi. The
+  // dropdown must reflect that (otherwise users see "tau" selected but
+  // can't re-pick tau without first switching to something else).
+  await setSequence(page, 'tau');
+  await page.reload();
+  await expect(page.locator('#app-title')).toContainText('π');
+  await expect(page.locator('#prefix')).toContainText('3.');
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('#sequence')).toHaveValue('pi');
+});
+
 test('skipped tile click opens the skip dialog', async ({ page }) => {
   await page.locator('#stat-skipped-tile').click();
   await expect(page.locator('#skip-modal')).toBeVisible();
