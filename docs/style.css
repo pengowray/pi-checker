@@ -572,7 +572,7 @@ input[type="range"]:disabled {
   font-size: 0.85rem;
   font-style: italic;
   color: var(--muted);
-  text-align: center;
+  text-align: left;
   margin-bottom: 0.4rem;
   font-variant-numeric: tabular-nums;
 }

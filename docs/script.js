@@ -459,7 +459,7 @@ function updateKeypadHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
   const idx = (state.nextSeqIdx || 0) + 1;
-  keypadHintEl.textContent = 'enter digit ' + idx + ' of ' + (def.shortLabel || def.label);
+  keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + (def.shortLabel || def.label) + ':';
 }
 
 function updateModeHint() {
