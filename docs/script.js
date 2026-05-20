@@ -112,6 +112,7 @@ const state = {
   hardcoreFailed: false,
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
+  compTimerHidden: false,
 };
 
 // ---- DOM refs ----
@@ -337,6 +338,7 @@ function clearSession() {
   state.competitiveFrozenAt = 0;
   state.hardcoreFailed = false;
   state.integerCharsConsumed = 0;
+  state.compTimerHidden = false;
 }
 
 function applyModeDefaults() {
@@ -781,6 +783,9 @@ function updateUI() {
   continueBtn.hidden = !((state.mode === 'competitive' && state.competitiveEnded) ||
                         (state.mode === 'hardcore' && state.hardcoreFailed));
   compTimerEl.hidden = state.mode !== 'competitive';
+  // Dim when the user has clicked it to hide, but force visible when the
+  // session is over so the final time stands out.
+  compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded);
 
   updateModeHint();
   updateModeBadge();
@@ -812,6 +817,21 @@ allCheckBtns.forEach(btn => wireKey(btn, forceCheck));
 resetBtn.addEventListener('click', reset);
 stopBtn.addEventListener('click', () => endCompetitive());
 continueBtn.addEventListener('click', () => continueInPractice());
+
+function toggleCompTimer() {
+  if (state.mode !== 'competitive') return;
+  if (state.competitiveEnded) return; // ended state always visible
+  state.compTimerHidden = !state.compTimerHidden;
+  updateUI();
+}
+compTimerEl.addEventListener('click', toggleCompTimer);
+compTimerEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleCompTimer();
+  }
+});
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';

@@ -107,7 +107,13 @@ main {
   letter-spacing: 0.08em;
   line-height: 1.1;
   margin: 0.2rem 0 0.6rem;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s;
 }
+
+.comp-timer.dimmed { opacity: 0.18; }
+.comp-timer.dimmed:hover { opacity: 0.5; }
 
 .comp-timer.warning { color: var(--skipped); }
 .comp-timer.danger {
