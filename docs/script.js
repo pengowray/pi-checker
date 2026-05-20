@@ -110,6 +110,7 @@ const state = {
   competitiveEnded: false,
   competitiveFrozenAt: 0,
   hardcoreFailed: false,
+  hardcoreFrozenAt: 0,
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   compTimerHidden: false,
@@ -317,6 +318,9 @@ function attemptModeChange(newMode) {
   }
 
   if (state.mode === 'hardcore' && newMode !== 'hardcore') {
+    if (state.hardcoreFailed && state.startTime !== null) {
+      state.startTime = performance.now() - state.hardcoreFrozenAt * 1000;
+    }
     state.hardcoreFailed = false;
   }
 
@@ -337,6 +341,7 @@ function clearSession() {
   state.competitiveEnded = false;
   state.competitiveFrozenAt = 0;
   state.hardcoreFailed = false;
+  state.hardcoreFrozenAt = 0;
   state.integerCharsConsumed = 0;
   state.compTimerHidden = false;
 }
@@ -384,6 +389,8 @@ function checkHardcoreFail() {
   for (const e of state.entries) {
     if (e.checked && e.status === 'wrong') {
       state.hardcoreFailed = true;
+      state.hardcoreFrozenAt = state.startTime === null ? 0
+        : (performance.now() - state.startTime) / 1000;
       return;
     }
   }
@@ -412,6 +419,9 @@ function continueInPractice() {
     state.competitiveEnded = false;
     state.gameLocked = false;
   } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
+    if (state.startTime !== null) {
+      state.startTime = performance.now() - state.hardcoreFrozenAt * 1000;
+    }
     state.hardcoreFailed = false;
   } else {
     return;
@@ -716,6 +726,8 @@ function tickTime() {
     let elapsed;
     if (state.competitiveEnded && state.mode === 'competitive') {
       elapsed = state.competitiveFrozenAt;
+    } else if (state.hardcoreFailed && state.mode === 'hardcore') {
+      elapsed = state.hardcoreFrozenAt;
     } else {
       elapsed = (performance.now() - state.startTime) / 1000;
     }
@@ -724,6 +736,9 @@ function tickTime() {
       const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
       statTime.textContent = formatTime(capped);
       statTime.classList.toggle('frozen', state.competitiveEnded);
+    } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
+      statTime.textContent = formatTime(elapsed);
+      statTime.classList.add('frozen');
     } else {
       statTime.textContent = formatTime(elapsed);
       statTime.classList.remove('frozen');
