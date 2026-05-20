@@ -438,7 +438,7 @@ input[type="range"]:disabled {
 
 .stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
@@ -468,6 +468,7 @@ input[type="range"]:disabled {
 
 #stat-correct { color: var(--correct); }
 #stat-wrong { color: var(--wrong); }
+#stat-erased { color: var(--muted); }
 #stat-skipped { color: var(--skipped); }
 #stat-pasted { color: var(--muted); }
 
@@ -712,7 +713,7 @@ input[type="range"]:disabled {
 
 @media (max-width: 480px) {
   main { padding: 0.7rem; }
-  .stats { grid-template-columns: repeat(4, 1fr); gap: 0.3rem; }
+  .stats { grid-template-columns: repeat(5, 1fr); gap: 0.3rem; }
   .stat-value { font-size: 1.05rem; }
   .stat-label { font-size: 0.65rem; }
   .pi-display { font-size: 1.2rem; padding: 0.8rem; }

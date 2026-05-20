@@ -113,6 +113,7 @@ const state = {
   hardcoreFrozenAt: 0,
   practicePaused: false,
   practicePauseDisplayedAt: 0,
+  erasedErrors: 0,
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   compTimerHidden: false,
@@ -150,6 +151,7 @@ const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
 const statSkipped = document.getElementById('stat-skipped');
 const statPasted = document.getElementById('stat-pasted');
+const statErased = document.getElementById('stat-erased');
 const statTime = document.getElementById('stat-time');
 
 // ---- Theme ----
@@ -346,6 +348,7 @@ function clearSession() {
   state.hardcoreFrozenAt = 0;
   state.practicePaused = false;
   state.practicePauseDisplayedAt = 0;
+  state.erasedErrors = 0;
   state.integerCharsConsumed = 0;
   state.compTimerHidden = false;
 }
@@ -561,6 +564,7 @@ function backspace() {
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
   if (state.mode === 'competitive' && last.checked && last.status === 'wrong') return;
+  if (last.status === 'wrong') state.erasedErrors += 1;
   state.entries.pop();
   if (state.entries.length === 0) state.integerCharsConsumed = 0;
   computeStatuses();
@@ -741,6 +745,7 @@ function render() {
   statWrong.textContent = wrong;
   statSkipped.textContent = skipped;
   statPasted.textContent = pasted;
+  statErased.textContent = state.erasedErrors;
 
   updateUI();
 }
