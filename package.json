@@ -1,0 +1,31 @@
+{
+  "name": "pi-checker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "serve": "http-server docs -p 8765 -c-1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pengowray/pi-checker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/pengowray/pi-checker/issues"
+  },
+  "homepage": "https://github.com/pengowray/pi-checker#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "http-server": "^14.1.1"
+  }
+}

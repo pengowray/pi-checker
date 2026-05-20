@@ -11,3 +11,12 @@ desktop.ini
 
 # Logs
 *.log
+
+# Node / npm
+node_modules/
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
