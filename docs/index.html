@@ -10,34 +10,14 @@
 <body>
   <header>
     <h1>&pi; Checker</h1>
-    <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">&#x1F319;</button>
+    <div class="header-actions">
+      <button id="settings-toggle" aria-label="Settings" title="Settings">&#x2699;</button>
+      <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">&#x1F319;</button>
+    </div>
   </header>
 
   <main>
-    <section class="controls">
-      <div class="mode-selector" role="radiogroup" aria-label="Mode">
-        <label class="mode-option">
-          <input type="radio" name="mode" value="normal" checked>
-          <span>Normal</span>
-        </label>
-        <label class="mode-option">
-          <input type="radio" name="mode" value="competitive">
-          <span>Competitive</span>
-        </label>
-        <label class="mode-option">
-          <input type="radio" name="mode" value="flawless">
-          <span>Flawless</span>
-        </label>
-      </div>
-
-      <div class="auto-check">
-        <label for="auto-seconds">
-          Auto-check delay: <strong><span id="auto-seconds-value">5</span>s</strong>
-        </label>
-        <input type="range" id="auto-seconds" min="0" max="30" value="5" step="1">
-        <small id="mode-hint" class="hint"></small>
-      </div>
-    </section>
+    <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings">Normal &middot; 3s auto-check</button>
 
     <section class="display-area" aria-live="polite">
       <div id="pi-display" class="pi-display">
@@ -49,7 +29,7 @@
       <div><div class="stat-label">Correct</div><div class="stat-value" id="stat-correct">0</div></div>
       <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">0</div></div>
       <div><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">0</div></div>
-      <div><div class="stat-label">Time</div><div class="stat-value" id="stat-time">0:00</div></div>
+      <div><div class="stat-label">Pasted</div><div class="stat-value" id="stat-pasted">0</div></div>
     </section>
 
     <section class="keypad" role="group" aria-label="Numeric keypad">
@@ -69,12 +49,50 @@
 
     <section class="actions">
       <button id="reset-btn" type="button">Reset</button>
+      <span id="stat-time" class="stat-time" aria-label="Elapsed time">0:00</span>
     </section>
 
     <footer class="foot">
-      Type or tap. <kbd>0-9</kbd>, <kbd>Backspace</kbd>, <kbd>Enter</kbd> to check.
+      Type, tap, or paste. <kbd>0-9</kbd>, <kbd>Backspace</kbd>, <kbd>Enter</kbd> to check.
     </footer>
   </main>
+
+  <div id="settings-modal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button id="settings-close" aria-label="Close" data-close>&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <div class="setting">
+          <div class="setting-label">Mode</div>
+          <div class="mode-selector" role="radiogroup" aria-label="Mode">
+            <label class="mode-option">
+              <input type="radio" name="mode" value="normal" checked>
+              <span>Normal</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="competitive">
+              <span>Competitive</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="flawless">
+              <span>Flawless</span>
+            </label>
+          </div>
+          <small id="mode-hint" class="hint"></small>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            Auto-check delay: <strong id="auto-seconds-label"><span id="auto-seconds-value">3</span>s</strong>
+          </div>
+          <input type="range" id="auto-seconds" min="0" max="31" value="3" step="1">
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>
