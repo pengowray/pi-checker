@@ -49,6 +49,10 @@
 
     <section class="actions">
       <button id="reset-btn" type="button">Reset</button>
+      <div class="actions-conditional">
+        <button id="stop-btn" type="button" hidden>Stop</button>
+        <button id="continue-btn" type="button" hidden>Continue in casual mode</button>
+      </div>
       <span id="stat-time" class="stat-time" aria-label="Elapsed time">0:00</span>
     </section>
 
@@ -73,12 +77,12 @@
               <span>Normal</span>
             </label>
             <label class="mode-option">
-              <input type="radio" name="mode" value="competitive">
-              <span>Competitive</span>
-            </label>
-            <label class="mode-option">
               <input type="radio" name="mode" value="flawless">
               <span>Flawless</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="mode" value="competitive">
+              <span>Competitive</span>
             </label>
           </div>
           <small id="mode-hint" class="hint"></small>
@@ -86,7 +90,7 @@
 
         <div class="setting">
           <div class="setting-label">
-            Auto-check delay: <strong id="auto-seconds-label"><span id="auto-seconds-value">3</span>s</strong>
+            Auto-check delay: <strong id="auto-seconds-label">3s</strong>
           </div>
           <input type="range" id="auto-seconds" min="0" max="31" value="3" step="1">
         </div>

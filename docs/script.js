@@ -22,23 +22,25 @@ const PI_DIGITS = (
 
 const MODE_FIXED_DELAY = { competitive: 2, flawless: 0 };
 const DEFAULT_NORMAL_DELAY = 3;
-const MANUAL_DELAY = 31; // slider sentinel — no auto-check; user presses Check/Enter
+const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
+const COMPETITIVE_LIMIT_SECONDS = 10 * 60;
 
 const state = {
   mode: 'normal',
   autoCheckSeconds: DEFAULT_NORMAL_DELAY,
   normalDelay: DEFAULT_NORMAL_DELAY, // remember user's choice for normal mode
-  // Each entry: { char, t (ms since startTime), checked, status, expected, skippedBefore }
+  // Each entry: { char, t, pasted, checked, status, expected, skippedBefore }
   entries: [],
   startTime: null,
   autoCheckTimer: null,
   gameLocked: false,
+  competitiveEnded: false,
+  competitiveFrozenAt: 0, // seconds elapsed when the comp session ended
 };
 
 // ---- DOM refs ----
 const userDigitsEl = document.getElementById('user-digits');
 const autoSecondsInput = document.getElementById('auto-seconds');
-const autoSecondsValue = document.getElementById('auto-seconds-value');
 const autoSecondsLabel = document.getElementById('auto-seconds-label');
 const modeInputs = document.querySelectorAll('input[name="mode"]');
 const themeToggle = document.getElementById('theme-toggle');
@@ -48,6 +50,9 @@ const settingsModal = document.getElementById('settings-modal');
 const checkBtn = document.getElementById('check-btn');
 const backBtn = document.getElementById('back-btn');
 const resetBtn = document.getElementById('reset-btn');
+const stopBtn = document.getElementById('stop-btn');
+const continueBtn = document.getElementById('continue-btn');
+const digitBtns = document.querySelectorAll('.key[data-digit]');
 const modeHint = document.getElementById('mode-hint');
 const modeBadge = document.getElementById('mode-badge');
 
@@ -100,16 +105,43 @@ function renderDelayLabel() {
 
 modeInputs.forEach(input => {
   input.addEventListener('change', () => {
-    if (state.gameLocked) {
+    if (!attemptModeChange(input.value)) {
       const cur = document.querySelector(`input[name="mode"][value="${state.mode}"]`);
       if (cur) cur.checked = true;
-      return;
     }
-    state.mode = input.value;
-    applyModeDefaults();
     updateUI();
   });
 });
+
+function attemptModeChange(newMode) {
+  if (newMode === state.mode) return true;
+
+  // Competitive and Flawless can only be entered from a fresh session.
+  if ((newMode === 'competitive' || newMode === 'flawless') && state.entries.length > 0) {
+    return false;
+  }
+
+  // Leaving an active competitive session to Normal requires confirmation.
+  if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded && newMode === 'normal') {
+    const ok = confirm('Your competitive session will end. Continue in casual mode?');
+    if (!ok) return false;
+    state.gameLocked = false;
+  }
+
+  // Tidy up competitive state when leaving the mode in any way.
+  if (state.mode === 'competitive' && newMode !== 'competitive') {
+    // If the session ended, sync the timer so the display continues smoothly
+    if (state.competitiveEnded && state.startTime !== null) {
+      state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
+    }
+    state.competitiveEnded = false;
+    state.gameLocked = false;
+  }
+
+  state.mode = newMode;
+  applyModeDefaults();
+  return true;
+}
 
 function applyModeDefaults() {
   if (state.mode in MODE_FIXED_DELAY) {
@@ -125,24 +157,60 @@ function applyModeDefaults() {
 function updateModeBadge() {
   const modeName = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
   let delayText;
-  if (isManual()) delayText = 'manual';
+  if (state.mode === 'competitive' && state.competitiveEnded) delayText = 'ended';
+  else if (isManual()) delayText = 'manual';
   else if (state.autoCheckSeconds === 0) delayText = 'instant';
   else delayText = state.autoCheckSeconds + 's auto-check';
   modeBadge.textContent = modeName + ' · ' + delayText;
-  modeBadge.classList.toggle('locked', state.gameLocked);
+  modeBadge.classList.toggle('locked', state.gameLocked && !state.competitiveEnded);
 }
 
 function updateModeHint() {
   const hints = {
     normal: 'Type or paste digits. Backspace removes recent input.',
-    competitive: 'Fixed 2s auto-check. Wrong digits stay locked once checked.',
-    flawless: 'Instant lock-in. No backspace allowed.',
+    competitive: '2s auto-check, 10 minute limit, wrong digits stay locked. Reset is required to start.',
+    flawless: 'Instant lock-in, no backspace. Reset is required to start.',
   };
   modeHint.textContent = hints[state.mode] || '';
 }
 
+function isInputLocked() {
+  return state.competitiveEnded && state.mode === 'competitive';
+}
+
+// ---- Competitive session lifecycle ----
+function endCompetitive() {
+  if (state.mode !== 'competitive' || state.competitiveEnded) return;
+  state.competitiveEnded = true;
+  const elapsed = state.startTime === null ? 0 : (performance.now() - state.startTime) / 1000;
+  state.competitiveFrozenAt = Math.min(COMPETITIVE_LIMIT_SECONDS, elapsed);
+  if (state.autoCheckTimer) {
+    clearTimeout(state.autoCheckTimer);
+    state.autoCheckTimer = null;
+  }
+  markAllChecked();
+  render();
+}
+
+function continueInCasual() {
+  if (!(state.mode === 'competitive' && state.competitiveEnded)) return;
+  // Pick up the casual timer at the same elapsed value so the display
+  // continues smoothly instead of jumping forward.
+  if (state.startTime !== null) {
+    state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
+  }
+  state.mode = 'normal';
+  state.competitiveEnded = false;
+  state.gameLocked = false;
+  const radio = document.querySelector('input[name="mode"][value="normal"]');
+  if (radio) radio.checked = true;
+  applyModeDefaults();
+  render();
+}
+
 // ---- Input handling ----
 function inputDigit(d) {
+  if (isInputLocked()) return;
   // Initial "3" is silently ignored (since "3." is prefilled)
   if (state.entries.length === 0 && d === '3') return;
 
@@ -167,6 +235,7 @@ function inputDigit(d) {
 }
 
 function inputPaste(text) {
+  if (isInputLocked()) return;
   const digits = text.replace(/\D/g, '').split('');
   if (digits.length === 0) return;
 
@@ -207,6 +276,7 @@ function inputPaste(text) {
 }
 
 function backspace() {
+  if (isInputLocked()) return;
   if (state.mode === 'flawless') return;
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
@@ -219,6 +289,7 @@ function backspace() {
 }
 
 function forceCheck() {
+  if (isInputLocked()) return;
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
@@ -365,33 +436,79 @@ function formatTime(seconds) {
 }
 
 function tickTime() {
-  if (state.startTime !== null) {
-    const elapsed = (performance.now() - state.startTime) / 1000;
-    statTime.textContent = formatTime(elapsed);
-  } else {
+  if (state.startTime === null) {
     statTime.textContent = '0:00';
+    statTime.classList.remove('frozen');
+    return;
+  }
+
+  // Auto-end competitive when limit hits
+  if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded) {
+    const elapsed = (performance.now() - state.startTime) / 1000;
+    if (elapsed >= COMPETITIVE_LIMIT_SECONDS) {
+      endCompetitive();
+      updateUI();
+    }
+  }
+
+  let elapsed;
+  if (state.competitiveEnded && state.mode === 'competitive') {
+    elapsed = state.competitiveFrozenAt;
+  } else {
+    elapsed = (performance.now() - state.startTime) / 1000;
+  }
+
+  if (state.mode === 'competitive') {
+    const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
+    statTime.textContent = formatTime(capped) + ' / ' + formatTime(COMPETITIVE_LIMIT_SECONDS);
+    statTime.classList.toggle('frozen', state.competitiveEnded);
+  } else {
+    statTime.textContent = formatTime(elapsed);
+    statTime.classList.remove('frozen');
   }
 }
 setInterval(tickTime, 250);
 
 // ---- UI state (enable/disable controls) ----
 function updateUI() {
-  const locked = state.gameLocked;
+  const hasEntries = state.entries.length > 0;
+  const inputLocked = isInputLocked();
+  const compActive = state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded;
 
-  modeInputs.forEach(input => { input.disabled = locked; });
-  autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || locked;
+  // Mode radios: competitive and flawless need a fresh session
+  modeInputs.forEach(input => {
+    if (input.value === 'normal') {
+      input.disabled = false;
+      input.parentElement.title = '';
+    } else {
+      const disabled = hasEntries && state.mode !== input.value;
+      input.disabled = disabled;
+      input.parentElement.title = disabled ? 'Reset to start a ' + input.value + ' session.' : '';
+    }
+  });
+  autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || state.gameLocked;
 
-  // Backspace enabled?
-  let backDisabled = false;
-  if (state.mode === 'flawless') backDisabled = true;
-  else if (state.entries.length === 0) backDisabled = true;
-  else if (state.mode === 'competitive') {
-    const last = state.entries[state.entries.length - 1];
-    if (last.checked && last.status === 'wrong') backDisabled = true;
+  // Digit keys
+  digitBtns.forEach(btn => { btn.disabled = inputLocked; });
+
+  // Backspace
+  let backDisabled = inputLocked;
+  if (!backDisabled) {
+    if (state.mode === 'flawless') backDisabled = true;
+    else if (!hasEntries) backDisabled = true;
+    else if (state.mode === 'competitive') {
+      const last = state.entries[state.entries.length - 1];
+      if (last.checked && last.status === 'wrong') backDisabled = true;
+    }
   }
   backBtn.disabled = backDisabled;
 
-  checkBtn.disabled = !hasPending();
+  checkBtn.disabled = inputLocked || !hasPending();
+
+  // Conditional action buttons
+  stopBtn.hidden = !compActive;
+  continueBtn.hidden = !(state.mode === 'competitive' && state.competitiveEnded);
+
   updateModeHint();
   updateModeBadge();
 }
@@ -405,6 +522,8 @@ function reset() {
   state.entries = [];
   state.startTime = null;
   state.gameLocked = false;
+  state.competitiveEnded = false;
+  state.competitiveFrozenAt = 0;
   // re-read mode from radio
   const checkedRadio = document.querySelector('input[name="mode"]:checked');
   if (checkedRadio) state.mode = checkedRadio.value;
@@ -422,12 +541,14 @@ function wireKey(btn, fn) {
   btn.addEventListener('mousedown', (e) => e.preventDefault());
 }
 
-document.querySelectorAll('.key[data-digit]').forEach(btn => {
+digitBtns.forEach(btn => {
   wireKey(btn, () => inputDigit(btn.dataset.digit));
 });
 wireKey(backBtn, backspace);
 wireKey(checkBtn, forceCheck);
 resetBtn.addEventListener('click', reset);
+stopBtn.addEventListener('click', () => endCompetitive());
+continueBtn.addEventListener('click', () => continueInCasual());
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
