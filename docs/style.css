@@ -456,21 +456,58 @@ input[type="range"]:disabled {
 
 .keypad-decimal {
   grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    "k1 k2 k3"
+    "k4 k5 k6"
+    "k7 k8 k9"
+    "kc k0 kb";
+}
+
+.keypad-decimal.flipped {
+  grid-template-areas:
+    "k7 k8 k9"
+    "k4 k5 k6"
+    "k1 k2 k3"
+    "kc k0 kb";
 }
 
 .keypad-hex {
   grid-template-columns: repeat(4, 1fr);
+  grid-template-areas:
+    "k1 k2 k3 kA"
+    "k4 k5 k6 kB"
+    "k7 k8 k9 kC"
+    "kc k0 kb kD"
+    ".  kE kF .";
 }
 
-.key-wide {
-  grid-column: span 3;
+.keypad-hex.flipped {
+  grid-template-areas:
+    "k7 k8 k9 kA"
+    "k4 k5 k6 kB"
+    "k1 k2 k3 kC"
+    "kc k0 kb kD"
+    ".  kE kF .";
 }
 
-/* Place E in the second column of the trailing row so E and F end up
-   centered (col 2 and col 3), leaving cols 1 and 4 of that row empty. */
-.keypad-hex .key-ef {
-  grid-column: 2;
-}
+.keypad [data-digit="0"] { grid-area: k0; }
+.keypad [data-digit="1"] { grid-area: k1; }
+.keypad [data-digit="2"] { grid-area: k2; }
+.keypad [data-digit="3"] { grid-area: k3; }
+.keypad [data-digit="4"] { grid-area: k4; }
+.keypad [data-digit="5"] { grid-area: k5; }
+.keypad [data-digit="6"] { grid-area: k6; }
+.keypad [data-digit="7"] { grid-area: k7; }
+.keypad [data-digit="8"] { grid-area: k8; }
+.keypad [data-digit="9"] { grid-area: k9; }
+.keypad [data-digit="A"] { grid-area: kA; }
+.keypad [data-digit="B"] { grid-area: kB; }
+.keypad [data-digit="C"] { grid-area: kC; }
+.keypad [data-digit="D"] { grid-area: kD; }
+.keypad [data-digit="E"] { grid-area: kE; }
+.keypad [data-digit="F"] { grid-area: kF; }
+.keypad [data-action="check"] { grid-area: kc; }
+.keypad [data-action="back"] { grid-area: kb; }
 
 .key {
   background: var(--key-bg);

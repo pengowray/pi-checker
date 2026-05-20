@@ -87,7 +87,10 @@ const STORAGE_KEYS = {
   theme: 'pi-theme',
   practiceDelay: 'pi-practice-delay',
   groupSize: 'pi-group-size',
+  keypadFlip: 'pi-keypad-flip',
 };
+
+const DEFAULT_KEYPAD_FLIP = false;
 
 const state = {
   sequenceId: 'pi',
@@ -108,6 +111,7 @@ const state = {
   competitiveFrozenAt: 0,
   hardcoreFailed: false,
   groupSize: 0,
+  keypadFlipped: DEFAULT_KEYPAD_FLIP,
 };
 
 // ---- DOM refs ----
@@ -135,6 +139,7 @@ const modeHint = document.getElementById('mode-hint');
 const modeBadge = document.getElementById('mode-badge');
 const compTimerEl = document.getElementById('comp-timer');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
+const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const resetBtns = document.querySelectorAll('.setting-reset');
 
 const statCorrect = document.getElementById('stat-correct');
@@ -166,6 +171,24 @@ themeInputs.forEach(input => {
   });
 });
 initTheme();
+
+// ---- Keypad flip (phone vs numpad) ----
+function applyKeypadFlip(flipped) {
+  state.keypadFlipped = !!flipped;
+  keypadDecimal.classList.toggle('flipped', state.keypadFlipped);
+  keypadHex.classList.toggle('flipped', state.keypadFlipped);
+  const value = state.keypadFlipped ? 'numpad' : 'phone';
+  keypadFlipInputs.forEach(input => { input.checked = input.value === value; });
+}
+
+keypadFlipInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    applyKeypadFlip(input.value === 'numpad');
+    localStorage.setItem(STORAGE_KEYS.keypadFlip, input.value);
+    updateResetVisibility();
+  });
+});
 
 // ---- Sequence selection ----
 function applySequence(id) {
@@ -852,6 +875,10 @@ resetBtns.forEach(btn => {
       localStorage.setItem(STORAGE_KEYS.groupSize, String(DEFAULT_GROUP_SIZE));
       updateResetVisibility();
       render();
+    } else if (target === 'keypad-flip') {
+      applyKeypadFlip(DEFAULT_KEYPAD_FLIP);
+      localStorage.setItem(STORAGE_KEYS.keypadFlip, DEFAULT_KEYPAD_FLIP ? 'numpad' : 'phone');
+      updateResetVisibility();
     }
   });
 });
@@ -863,6 +890,7 @@ function updateResetVisibility() {
     if (target === 'sequence') isDefault = state.sequenceId === DEFAULT_SEQUENCE;
     else if (target === 'auto-check') isDefault = state.practiceDelay === DEFAULT_PRACTICE_DELAY;
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
+    else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
     btn.hidden = isDefault;
   });
 }
@@ -917,6 +945,12 @@ function loadPersistedSettings() {
   if (!isNaN(savedGroup) && [0, 2, 3, 4, 5, 6, 7].includes(savedGroup)) {
     state.groupSize = savedGroup;
     groupSizeSelect.value = String(savedGroup);
+  }
+  const savedFlip = localStorage.getItem(STORAGE_KEYS.keypadFlip);
+  if (savedFlip === 'numpad' || savedFlip === 'phone') {
+    applyKeypadFlip(savedFlip === 'numpad');
+  } else {
+    applyKeypadFlip(DEFAULT_KEYPAD_FLIP);
   }
 }
 

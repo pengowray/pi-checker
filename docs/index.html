@@ -65,7 +65,7 @@
       <button class="key" data-digit="0">0</button>
       <button class="key key-back" data-action="back" aria-label="Backspace">&#x232B;</button>
       <button class="key" data-digit="D">D</button>
-      <button class="key key-ef" data-digit="E">E</button>
+      <button class="key" data-digit="E">E</button>
       <button class="key" data-digit="F">F</button>
     </section>
 
@@ -144,6 +144,23 @@
             <label class="mode-option">
               <input type="radio" name="theme" value="dark">
               <span>Dark</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            Keypad layout
+            <button type="button" class="setting-reset" data-reset="keypad-flip" hidden aria-label="Reset keypad layout to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Keypad layout">
+            <label class="mode-option">
+              <input type="radio" name="keypad-flip" value="phone" checked>
+              <span>Phone (1 top)</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="keypad-flip" value="numpad">
+              <span>Numpad (7 top)</span>
             </label>
           </div>
         </div>
