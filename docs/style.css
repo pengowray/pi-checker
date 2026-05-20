@@ -71,6 +71,15 @@ header h1 {
   line-height: 1.1;
 }
 
+.byline {
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--muted);
+  opacity: 0.55;
+  margin-left: 0.3rem;
+}
+
 .header-titles {
   display: flex;
   flex-direction: column;
