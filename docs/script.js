@@ -64,6 +64,36 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '',
   },
+  e: {
+    label: 'e (Euler’s number)',
+    shortLabel: 'e',
+    hintLabel: 'e, Euler’s number',
+    titleHtml: 'e Checker',
+    integerPart: '2',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  ln2: {
+    label: 'ln 2',
+    shortLabel: 'ln 2',
+    hintLabel: 'the natural log of 2',
+    titleHtml: 'ln 2 Checker',
+    integerPart: '0',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  champernowne: {
+    label: 'Champernowne’s constant',
+    shortLabel: 'Champernowne',
+    hintLabel: 'Champernowne’s constant (0.12345678910…)',
+    titleHtml: 'Champernowne Checker',
+    integerPart: '0',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',          // filled by setupChampernowne()
+  },
   'pi-binary': {
     label: 'π in binary',
     shortLabel: 'π in binary',
@@ -117,7 +147,7 @@ const SEQUENCES = {
 
 // Pull in the bundled secondary sequences
 if (window.SEQUENCE_DATA) {
-  for (const key of ['phi', 'sqrt2', 'pi-binary', 'pi-hex']) {
+  for (const key of ['phi', 'sqrt2', 'e', 'ln2', 'pi-binary', 'pi-hex']) {
     if (window.SEQUENCE_DATA[key]) {
       SEQUENCES[key].digits = window.SEQUENCE_DATA[key].digits;
     }
@@ -171,6 +201,14 @@ deriveTau();
   SEQUENCES.primes.digits = joined;
   SEQUENCES.primes.primeBoundaries = boundaries;
   SEQUENCES['primes-spaced'].digits = primes.slice(1).join(' ');
+})();
+
+(function setupChampernowne() {
+  // 0.123456789 10 11 12 ... — concatenated positive integers.
+  // The leading "0." is the integerPart; digits start with "1".
+  let out = '';
+  for (let i = 1; out.length < 5000; i++) out += i;
+  SEQUENCES.champernowne.digits = out;
 })();
 
 // ---- Constants ----
