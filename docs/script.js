@@ -1,5 +1,8 @@
-// Pi digits after the decimal point (1000 digits).
-const PI_DIGITS = (
+// ---- Sequences ----
+// Built-in fallback for pi (replaced asynchronously by the long version
+// from pi-long.js when it loads). The other sequences are bundled in
+// sequences.js (window.SEQUENCE_DATA).
+const SHORT_PI = (
   "1415926535897932384626433832795028841971693993751058209749" +
   "4459230781640628620899862803482534211706798214808651328230" +
   "6647093844609550582231725359408128481117450284102701938521" +
@@ -20,41 +23,105 @@ const PI_DIGITS = (
   "59092164201989"
 );
 
-const MODE_FIXED_DELAY = { competitive: 2, flawless: 0 };
-const DEFAULT_NORMAL_DELAY = 3;
+const SEQUENCES = {
+  pi: {
+    label: 'π (pi)',
+    titleHtml: '&pi; Checker',
+    integerPart: '3',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: SHORT_PI,
+  },
+  phi: {
+    label: 'φ (golden ratio)',
+    titleHtml: '&phi; Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  sqrt2: {
+    label: '√2',
+    titleHtml: '&radic;2 Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  'pi-binary': {
+    label: 'π in binary',
+    titleHtml: '&pi; in binary',
+    integerPart: '11',
+    alphabet: '01',
+    keypadType: 'decimal', // same 3x4 grid, 2-9 greyed out
+    digits: '',
+  },
+  'pi-hex': {
+    label: 'π in hex',
+    titleHtml: '&pi; in hex',
+    integerPart: '3',
+    alphabet: '0123456789ABCDEF',
+    keypadType: 'hex',
+    digits: '',
+  },
+};
+
+// Pull in the bundled secondary sequences
+if (window.SEQUENCE_DATA) {
+  for (const key of ['phi', 'sqrt2', 'pi-binary', 'pi-hex']) {
+    if (window.SEQUENCE_DATA[key]) {
+      SEQUENCES[key].digits = window.SEQUENCE_DATA[key].digits;
+    }
+  }
+}
+
+// ---- Constants ----
+const MODE_FIXED_DELAY = { competitive: 2, hardcore: 0 };
+const DEFAULT_PRACTICE_DELAY = 3;
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
 const COMPETITIVE_LIMIT_SECONDS = 10 * 60;
 
 const state = {
-  mode: 'normal',
-  autoCheckSeconds: DEFAULT_NORMAL_DELAY,
-  normalDelay: DEFAULT_NORMAL_DELAY, // remember user's choice for normal mode
+  sequenceId: 'pi',
+  digits: SEQUENCES.pi.digits,
+  integerPart: SEQUENCES.pi.integerPart,
+  alphabet: SEQUENCES.pi.alphabet,
+  keypadType: SEQUENCES.pi.keypadType,
+  integerCharsConsumed: 0, // how many leading integer-part chars the user has typed
+  mode: 'practice',
+  autoCheckSeconds: DEFAULT_PRACTICE_DELAY,
+  practiceDelay: DEFAULT_PRACTICE_DELAY, // remember user's choice for practice mode
   // Each entry: { char, t, pasted, checked, status, expected, skippedBefore }
   entries: [],
   startTime: null,
   autoCheckTimer: null,
   gameLocked: false,
   competitiveEnded: false,
-  competitiveFrozenAt: 0, // seconds elapsed when the comp session ended
-  groupSize: 0, // 0 = off; otherwise 2..7
+  competitiveFrozenAt: 0,
+  groupSize: 0,
 };
 
 // ---- DOM refs ----
 const userDigitsEl = document.getElementById('user-digits');
+const piDisplayEl = document.getElementById('pi-display');
+const prefixEl = document.getElementById('prefix');
+const appTitleEl = document.getElementById('app-title');
+const sequenceSelect = document.getElementById('sequence');
 const autoSecondsInput = document.getElementById('auto-seconds');
 const autoSecondsLabel = document.getElementById('auto-seconds-label');
 const groupSizeSelect = document.getElementById('group-size');
 const modeInputs = document.querySelectorAll('input[name="mode"]');
 const themeToggle = document.getElementById('theme-toggle');
 const settingsToggle = document.getElementById('settings-toggle');
-const settingsClose = document.getElementById('settings-close');
 const settingsModal = document.getElementById('settings-modal');
-const checkBtn = document.getElementById('check-btn');
-const backBtn = document.getElementById('back-btn');
 const resetBtn = document.getElementById('reset-btn');
 const stopBtn = document.getElementById('stop-btn');
 const continueBtn = document.getElementById('continue-btn');
-const digitBtns = document.querySelectorAll('.key[data-digit]');
+const keypadDecimal = document.getElementById('keypad-decimal');
+const keypadHex = document.getElementById('keypad-hex');
+const allDigitBtns = document.querySelectorAll('.key[data-digit]');
+const allCheckBtns = document.querySelectorAll('[data-action="check"]');
+const allBackBtns = document.querySelectorAll('[data-action="back"]');
 const modeHint = document.getElementById('mode-hint');
 const modeBadge = document.getElementById('mode-badge');
 
@@ -75,11 +142,6 @@ function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   themeToggle.textContent = theme === 'dark' ? '☀️' : '\u{1F319}';
 }
-groupSizeSelect.addEventListener('change', () => {
-  state.groupSize = parseInt(groupSizeSelect.value, 10) || 0;
-  render();
-});
-
 themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
@@ -88,15 +150,52 @@ themeToggle.addEventListener('click', () => {
 });
 initTheme();
 
+// ---- Sequence selection ----
+function applySequence(id) {
+  const def = SEQUENCES[id];
+  if (!def) return;
+  state.sequenceId = id;
+  state.digits = def.digits;
+  state.integerPart = def.integerPart;
+  state.alphabet = def.alphabet;
+  state.keypadType = def.keypadType;
+  state.integerCharsConsumed = 0;
+  prefixEl.textContent = def.integerPart + '.';
+  appTitleEl.innerHTML = def.titleHtml;
+  // Swap keypad layout
+  keypadDecimal.hidden = def.keypadType !== 'decimal';
+  keypadHex.hidden = def.keypadType !== 'hex';
+}
+
+sequenceSelect.addEventListener('change', () => {
+  const newId = sequenceSelect.value;
+  if (newId === state.sequenceId) return;
+  if (state.entries.length > 0) {
+    const ok = confirm('Switching sequence will reset your current progress. Continue?');
+    if (!ok) {
+      sequenceSelect.value = state.sequenceId;
+      return;
+    }
+  }
+  clearSession();
+  applySequence(newId);
+  render();
+});
+
+// ---- Group size ----
+groupSizeSelect.addEventListener('change', () => {
+  state.groupSize = parseInt(groupSizeSelect.value, 10) || 0;
+  render();
+});
+
 // ---- Mode + slider ----
 autoSecondsInput.addEventListener('input', () => {
   if (state.mode in MODE_FIXED_DELAY) {
-    // Snap back; the slider is locked in these modes
     autoSecondsInput.value = MODE_FIXED_DELAY[state.mode];
     return;
   }
   state.autoCheckSeconds = parseInt(autoSecondsInput.value, 10);
-  state.normalDelay = state.autoCheckSeconds;
+  state.practiceDelay = state.autoCheckSeconds;
   renderDelayLabel();
   updateModeBadge();
   if (hasPending()) resetAutoCheckTimer();
@@ -123,9 +222,8 @@ modeInputs.forEach(input => {
 function attemptModeChange(newMode) {
   if (newMode === state.mode) return true;
 
-  // Competitive and Flawless always start from a fresh session.
-  // If there is existing progress, confirm before clearing it.
-  if (newMode === 'competitive' || newMode === 'flawless') {
+  // Hardcore and Competitive always start from a fresh session.
+  if (newMode === 'competitive' || newMode === 'hardcore') {
     if (state.entries.length > 0) {
       const ok = confirm('This will reset your current progress. Start a new ' + newMode + ' session?');
       if (!ok) return false;
@@ -136,16 +234,14 @@ function attemptModeChange(newMode) {
     return true;
   }
 
-  // Leaving an active competitive session to Normal requires confirmation.
-  if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded && newMode === 'normal') {
-    const ok = confirm('Your competitive session will end. Continue in casual mode?');
+  // Leaving an active competitive session to Practice requires confirmation.
+  if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded && newMode === 'practice') {
+    const ok = confirm('Your competitive session will end. Continue in practice mode?');
     if (!ok) return false;
     state.gameLocked = false;
   }
 
-  // Tidy up competitive state when leaving the mode in any way.
   if (state.mode === 'competitive' && newMode !== 'competitive') {
-    // If the session ended, sync the timer so the display continues smoothly
     if (state.competitiveEnded && state.startTime !== null) {
       state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
     }
@@ -168,13 +264,14 @@ function clearSession() {
   state.gameLocked = false;
   state.competitiveEnded = false;
   state.competitiveFrozenAt = 0;
+  state.integerCharsConsumed = 0;
 }
 
 function applyModeDefaults() {
   if (state.mode in MODE_FIXED_DELAY) {
     state.autoCheckSeconds = MODE_FIXED_DELAY[state.mode];
   } else {
-    state.autoCheckSeconds = state.normalDelay;
+    state.autoCheckSeconds = state.practiceDelay;
   }
   autoSecondsInput.value = state.autoCheckSeconds;
   renderDelayLabel();
@@ -194,9 +291,9 @@ function updateModeBadge() {
 
 function updateModeHint() {
   const hints = {
-    normal: 'Type or paste digits. Backspace removes recent input.',
+    practice: 'Type or paste digits. Backspace removes recent input.',
     competitive: '2s auto-check, 10 minute limit, wrong digits stay locked. Reset is required to start.',
-    flawless: 'Instant lock-in, no backspace. Reset is required to start.',
+    hardcore: 'Instant lock-in, no backspace. Reset is required to start.',
   };
   modeHint.textContent = hints[state.mode] || '';
 }
@@ -219,17 +316,15 @@ function endCompetitive() {
   render();
 }
 
-function continueInCasual() {
+function continueInPractice() {
   if (!(state.mode === 'competitive' && state.competitiveEnded)) return;
-  // Pick up the casual timer at the same elapsed value so the display
-  // continues smoothly instead of jumping forward.
   if (state.startTime !== null) {
     state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
   }
-  state.mode = 'normal';
+  state.mode = 'practice';
   state.competitiveEnded = false;
   state.gameLocked = false;
-  const radio = document.querySelector('input[name="mode"][value="normal"]');
+  const radio = document.querySelector('input[name="mode"][value="practice"]');
   if (radio) radio.checked = true;
   applyModeDefaults();
   render();
@@ -238,8 +333,17 @@ function continueInCasual() {
 // ---- Input handling ----
 function inputDigit(d) {
   if (isInputLocked()) return;
-  // Initial "3" is silently ignored (since "3." is prefilled)
-  if (state.entries.length === 0 && d === '3') return;
+  d = d.toUpperCase();
+  if (!state.alphabet.includes(d)) return;
+
+  // Silently absorb leading integer-part chars (e.g. user types "3" first
+  // when "3." is already displayed; or "1" then "1" for pi-binary).
+  if (state.entries.length === 0 && state.integerCharsConsumed < state.integerPart.length) {
+    if (d === state.integerPart[state.integerCharsConsumed]) {
+      state.integerCharsConsumed += 1;
+      return;
+    }
+  }
 
   if (state.startTime === null) {
     state.startTime = performance.now();
@@ -263,35 +367,44 @@ function inputDigit(d) {
 
 function inputPaste(text) {
   if (isInputLocked()) return;
-  const digits = text.replace(/\D/g, '').split('');
+  const upper = text.toUpperCase();
+  const digits = [];
+  for (const c of upper) {
+    if (state.alphabet.includes(c)) digits.push(c);
+  }
   if (digits.length === 0) return;
 
-  // Lock in any currently pending entries first
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
   }
   markAllChecked();
 
+  // Skip the leading integer part if the paste opens with it
   let startIdx = 0;
-  if (state.entries.length === 0 && digits[0] === '3') {
-    startIdx = 1;
+  if (state.entries.length === 0) {
+    for (let i = state.integerCharsConsumed; i < state.integerPart.length && startIdx < digits.length; i++) {
+      if (digits[startIdx] === state.integerPart[i]) {
+        startIdx += 1;
+        state.integerCharsConsumed += 1;
+      } else {
+        break;
+      }
+    }
   }
+
   if (startIdx >= digits.length) {
     render();
     return;
   }
 
-  // Paste does not start the timer or lock the mode — those wait for the
-  // first real keypress. Pasted entries get t = elapsed if a session is
-  // already running, else null.
   for (let k = startIdx; k < digits.length; k++) {
     const t = state.startTime === null ? null : (performance.now() - state.startTime);
     state.entries.push({
       char: digits[k],
       t: t,
       pasted: true,
-      checked: true, // pasted digits lock in immediately
+      checked: true,
       status: 'pending',
       expected: null,
       skippedBefore: [],
@@ -304,12 +417,12 @@ function inputPaste(text) {
 
 function backspace() {
   if (isInputLocked()) return;
-  if (state.mode === 'flawless') return;
+  if (state.mode === 'hardcore') return;
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
-  // Competitive: locked-in errors stay
   if (state.mode === 'competitive' && last.checked && last.status === 'wrong') return;
   state.entries.pop();
+  if (state.entries.length === 0) state.integerCharsConsumed = 0;
   computeStatuses();
   resetAutoCheckTimer();
   render();
@@ -335,7 +448,7 @@ function resetAutoCheckTimer() {
     state.autoCheckTimer = null;
   }
   if (!hasPending()) return;
-  if (isManual()) return; // user must press Check/Enter
+  if (isManual()) return;
 
   const ms = state.autoCheckSeconds * 1000;
   if (ms <= 0) {
@@ -354,53 +467,51 @@ function markAllChecked() {
 }
 
 // ---- Status computation ----
-// Skips of up to 2 pi digits are only credited when the next 2 user digits
-// literally match the pi positions that follow (confirmation requirement).
 function computeStatuses() {
   const entries = state.entries;
-  let piIdx = 0;
+  const digits = state.digits;
+  let seqIdx = 0;
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     e.skippedBefore = [];
 
-    if (piIdx >= PI_DIGITS.length) {
+    if (seqIdx >= digits.length) {
       e.status = 'wrong';
       e.expected = null;
       continue;
     }
 
-    if (e.char === PI_DIGITS[piIdx]) {
+    if (e.char === digits[seqIdx]) {
       e.status = 'correct';
-      e.expected = PI_DIGITS[piIdx];
-      piIdx += 1;
+      e.expected = digits[seqIdx];
+      seqIdx += 1;
       continue;
     }
 
     let skipped = 0;
     for (let k = 1; k <= 2; k++) {
-      if (piIdx + k >= PI_DIGITS.length) break;
-      if (e.char !== PI_DIGITS[piIdx + k]) continue;
-      // Confirmation: the next 2 entries must directly match pi[piIdx+k+1..k+2]
+      if (seqIdx + k >= digits.length) break;
+      if (e.char !== digits[seqIdx + k]) continue;
       const n1 = entries[i + 1];
       const n2 = entries[i + 2];
       if (!n1 || !n2) continue;
-      if (piIdx + k + 2 >= PI_DIGITS.length) continue;
-      if (n1.char === PI_DIGITS[piIdx + k + 1] && n2.char === PI_DIGITS[piIdx + k + 2]) {
+      if (seqIdx + k + 2 >= digits.length) continue;
+      if (n1.char === digits[seqIdx + k + 1] && n2.char === digits[seqIdx + k + 2]) {
         skipped = k;
         break;
       }
     }
 
     if (skipped > 0) {
-      for (let j = 0; j < skipped; j++) e.skippedBefore.push(PI_DIGITS[piIdx + j]);
+      for (let j = 0; j < skipped; j++) e.skippedBefore.push(digits[seqIdx + j]);
       e.status = 'correct';
-      e.expected = PI_DIGITS[piIdx + skipped];
-      piIdx += skipped + 1;
+      e.expected = digits[seqIdx + skipped];
+      seqIdx += skipped + 1;
     } else {
       e.status = 'wrong';
-      e.expected = PI_DIGITS[piIdx];
-      piIdx += 1;
+      e.expected = digits[seqIdx];
+      seqIdx += 1;
     }
   }
 }
@@ -409,7 +520,7 @@ function computeStatuses() {
 function render() {
   const frag = document.createDocumentFragment();
   let correct = 0, wrong = 0, skipped = 0, pasted = 0;
-  let pos = 0; // count of rendered digit spans, for group boundaries
+  let pos = 0;
 
   function tagGroup(span) {
     if (state.groupSize > 0 && pos > 0 && pos % state.groupSize === 0) {
@@ -457,6 +568,7 @@ function render() {
   }
 
   userDigitsEl.replaceChildren(frag);
+  piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
 
   statCorrect.textContent = correct;
   statWrong.textContent = wrong;
@@ -479,7 +591,6 @@ function tickTime() {
     return;
   }
 
-  // Auto-end competitive when limit hits
   if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded) {
     const elapsed = (performance.now() - state.startTime) / 1000;
     if (elapsed >= COMPETITIVE_LIMIT_SECONDS) {
@@ -506,7 +617,7 @@ function tickTime() {
 }
 setInterval(tickTime, 250);
 
-// ---- UI state (enable/disable controls) ----
+// ---- UI state ----
 function updateUI() {
   const hasEntries = state.entries.length > 0;
   const inputLocked = isInputLocked();
@@ -515,24 +626,27 @@ function updateUI() {
   modeInputs.forEach(input => { input.disabled = false; input.parentElement.title = ''; });
   autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || state.gameLocked;
 
-  // Digit keys
-  digitBtns.forEach(btn => { btn.disabled = inputLocked; });
+  // Digit keys: disable if locked OR character not in current alphabet
+  allDigitBtns.forEach(btn => {
+    const inAlphabet = state.alphabet.includes(btn.dataset.digit);
+    btn.disabled = inputLocked || !inAlphabet;
+  });
 
   // Backspace
   let backDisabled = inputLocked;
   if (!backDisabled) {
-    if (state.mode === 'flawless') backDisabled = true;
+    if (state.mode === 'hardcore') backDisabled = true;
     else if (!hasEntries) backDisabled = true;
     else if (state.mode === 'competitive') {
       const last = state.entries[state.entries.length - 1];
       if (last.checked && last.status === 'wrong') backDisabled = true;
     }
   }
-  backBtn.disabled = backDisabled;
+  allBackBtns.forEach(btn => { btn.disabled = backDisabled; });
 
-  checkBtn.disabled = inputLocked || !hasPending();
+  const checkDisabled = inputLocked || !hasPending();
+  allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
-  // Conditional action buttons
   stopBtn.hidden = !compActive;
   continueBtn.hidden = !(state.mode === 'competitive' && state.competitiveEnded);
 
@@ -555,34 +669,36 @@ function wireKey(btn, fn) {
     fn();
     btn.blur();
   });
-  // Don't take focus on mouse press, so keyboard Enter doesn't re-trigger this button
   btn.addEventListener('mousedown', (e) => e.preventDefault());
 }
 
-digitBtns.forEach(btn => {
+allDigitBtns.forEach(btn => {
   wireKey(btn, () => inputDigit(btn.dataset.digit));
 });
-wireKey(backBtn, backspace);
-wireKey(checkBtn, forceCheck);
+allBackBtns.forEach(btn => wireKey(btn, backspace));
+allCheckBtns.forEach(btn => wireKey(btn, forceCheck));
 resetBtn.addEventListener('click', reset);
 stopBtn.addEventListener('click', () => endCompetitive());
-continueBtn.addEventListener('click', () => continueInCasual());
+continueBtn.addEventListener('click', () => continueInPractice());
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' && e.target.type === 'range') return;
+  if (tag === 'SELECT') return;
 
-  // Allow native paste shortcut to flow through (paste handler picks it up)
   if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) return;
 
-  if (e.key === 'Escape' && !settingsModal.hidden) {
-    closeSettings();
-    e.preventDefault();
+  if (!settingsModal.hidden) {
+    if (e.key === 'Escape') {
+      closeSettings();
+      e.preventDefault();
+    }
     return;
   }
 
-  if (e.key >= '0' && e.key <= '9') {
-    inputDigit(e.key);
+  const k = e.key.toUpperCase();
+  if (k.length === 1 && state.alphabet.includes(k)) {
+    inputDigit(k);
     e.preventDefault();
   } else if (e.key === 'Backspace') {
     backspace();
@@ -617,6 +733,32 @@ settingsModal.addEventListener('click', (e) => {
   if (e.target && e.target.hasAttribute('data-close')) closeSettings();
 });
 
+// ---- Async load of the long pi sequence ----
+function loadLongPi() {
+  const script = document.createElement('script');
+  script.src = 'pi-long.js';
+  script.async = true;
+  script.onload = () => {
+    if (typeof window.PI_LONG_DIGITS === 'string' && window.PI_LONG_DIGITS.length > SEQUENCES.pi.digits.length) {
+      SEQUENCES.pi.digits = window.PI_LONG_DIGITS;
+      if (state.sequenceId === 'pi') {
+        state.digits = SEQUENCES.pi.digits;
+        // Re-score entries that may have been beyond the short fallback
+        computeStatuses();
+        render();
+      }
+    }
+  };
+  script.onerror = () => {
+    // Long pi failed to load; the short bundled version still works
+    console.warn('Could not load pi-long.js; using short pi fallback');
+  };
+  document.head.appendChild(script);
+}
+
 // ---- Init ----
+applySequence('pi');
+applyModeDefaults();
 updateModeHint();
 render();
+loadLongPi();

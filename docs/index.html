@@ -9,7 +9,7 @@
 </head>
 <body>
   <header>
-    <h1>&pi; Checker</h1>
+    <h1 id="app-title">&pi; Checker</h1>
     <div class="header-actions">
       <button id="settings-toggle" aria-label="Settings" title="Settings">&#x2699;</button>
       <button id="theme-toggle" aria-label="Toggle theme" title="Toggle theme">&#x1F319;</button>
@@ -17,11 +17,11 @@
   </header>
 
   <main>
-    <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings">Normal &middot; 3s auto-check</button>
+    <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings">Practice &middot; 3s auto-check</button>
 
     <section class="display-area" aria-live="polite">
       <div id="pi-display" class="pi-display">
-        <span class="prefix">3.</span><span id="user-digits"></span><span class="cursor" id="cursor">|</span>
+        <span class="prefix" id="prefix">3.</span><span id="user-digits"></span><span class="cursor" id="cursor">|</span>
       </div>
     </section>
 
@@ -32,7 +32,7 @@
       <div><div class="stat-label">Pasted</div><div class="stat-value" id="stat-pasted">0</div></div>
     </section>
 
-    <section class="keypad" role="group" aria-label="Numeric keypad">
+    <section class="keypad keypad-decimal" id="keypad-decimal" role="group" aria-label="Numeric keypad">
       <button class="key" data-digit="1">1</button>
       <button class="key" data-digit="2">2</button>
       <button class="key" data-digit="3">3</button>
@@ -42,22 +42,43 @@
       <button class="key" data-digit="7">7</button>
       <button class="key" data-digit="8">8</button>
       <button class="key" data-digit="9">9</button>
-      <button class="key key-check" id="check-btn" aria-label="Check">&#x2713;</button>
+      <button class="key key-check" data-action="check" aria-label="Check">&#x2713;</button>
       <button class="key" data-digit="0">0</button>
-      <button class="key key-back" id="back-btn" aria-label="Backspace">&#x232B;</button>
+      <button class="key key-back" data-action="back" aria-label="Backspace">&#x232B;</button>
+    </section>
+
+    <section class="keypad keypad-hex" id="keypad-hex" role="group" aria-label="Hex keypad" hidden>
+      <button class="key" data-digit="0">0</button>
+      <button class="key" data-digit="1">1</button>
+      <button class="key" data-digit="2">2</button>
+      <button class="key" data-digit="3">3</button>
+      <button class="key" data-digit="4">4</button>
+      <button class="key" data-digit="5">5</button>
+      <button class="key" data-digit="6">6</button>
+      <button class="key" data-digit="7">7</button>
+      <button class="key" data-digit="8">8</button>
+      <button class="key" data-digit="9">9</button>
+      <button class="key" data-digit="A">A</button>
+      <button class="key" data-digit="B">B</button>
+      <button class="key" data-digit="C">C</button>
+      <button class="key" data-digit="D">D</button>
+      <button class="key" data-digit="E">E</button>
+      <button class="key" data-digit="F">F</button>
+      <button class="key key-back" data-action="back" aria-label="Backspace">&#x232B;</button>
+      <button class="key key-check key-wide" data-action="check" aria-label="Check">&#x2713;</button>
     </section>
 
     <section class="actions">
       <button id="reset-btn" type="button">Reset</button>
       <div class="actions-conditional">
         <button id="stop-btn" type="button" hidden>Stop</button>
-        <button id="continue-btn" type="button" hidden>Continue in casual mode</button>
+        <button id="continue-btn" type="button" hidden>Continue in practice mode</button>
       </div>
       <span id="stat-time" class="stat-time" aria-label="Elapsed time">0:00</span>
     </section>
 
     <footer class="foot">
-      Type, tap, or paste. <kbd>0-9</kbd>, <kbd>Backspace</kbd>, <kbd>Enter</kbd> to check.
+      Type, tap, or paste. <kbd>Backspace</kbd>, <kbd>Enter</kbd> to check.
     </footer>
   </main>
 
@@ -70,15 +91,26 @@
       </div>
       <div class="modal-body">
         <div class="setting">
+          <div class="setting-label"><label for="sequence">Sequence</label></div>
+          <select id="sequence" class="setting-select">
+            <option value="pi">&pi; (pi)</option>
+            <option value="phi">&phi; (golden ratio)</option>
+            <option value="sqrt2">&radic;2</option>
+            <option value="pi-binary">&pi; in binary</option>
+            <option value="pi-hex">&pi; in hex</option>
+          </select>
+        </div>
+
+        <div class="setting">
           <div class="setting-label">Mode</div>
           <div class="mode-selector" role="radiogroup" aria-label="Mode">
             <label class="mode-option">
-              <input type="radio" name="mode" value="normal" checked>
-              <span>Normal</span>
+              <input type="radio" name="mode" value="practice" checked>
+              <span>Practice</span>
             </label>
             <label class="mode-option">
-              <input type="radio" name="mode" value="flawless">
-              <span>Flawless</span>
+              <input type="radio" name="mode" value="hardcore">
+              <span>Hardcore</span>
             </label>
             <label class="mode-option">
               <input type="radio" name="mode" value="competitive">
@@ -111,6 +143,7 @@
     </div>
   </div>
 
+  <script src="sequences.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
