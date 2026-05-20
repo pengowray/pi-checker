@@ -146,6 +146,24 @@ test('champernowne: 99→100 boundary is correct', async ({ page }) => {
   await expect(page.locator('#stat-wrong')).toHaveText('0');
 });
 
+test('settings shows digit count under the sequence dropdown', async ({ page }) => {
+  // Open settings so the hint is visible.
+  await page.locator('#settings-toggle').click();
+  // Default sequence is pi — long pi may still be loading async, so check
+  // for any digit count, then verify the comma formatting on a known one.
+  await expect(page.locator('#sequence-digits-hint')).toHaveText(
+    /^[0-9,]+ digits available$/
+  );
+  // ln 2 is bundled with exactly 2200 digits.
+  await page.locator('#sequence').selectOption('ln2');
+  await expect(page.locator('#sequence-digits-hint')).toHaveText('2,200 digits available');
+  // Switching back to pi should swap the count (pi has at least the short
+  // fallback length of ~1000+).
+  await page.locator('#sequence').selectOption('pi');
+  const piText = await page.locator('#sequence-digits-hint').textContent();
+  expect(piText).toMatch(/^[0-9,]+ digits available$/);
+});
+
 test('keypad hint reflects new sequences', async ({ page }) => {
   await setSequence(page, 'e');
   await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of e, Euler’s number:');

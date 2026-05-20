@@ -271,6 +271,7 @@ const piDisplayEl = document.getElementById('pi-display');
 const prefixEl = document.getElementById('prefix');
 const appTitleEl = document.getElementById('app-title');
 const sequenceSelect = document.getElementById('sequence');
+const sequenceDigitsHintEl = document.getElementById('sequence-digits-hint');
 const autoSecondsInput = document.getElementById('auto-seconds');
 const autoSecondsLabel = document.getElementById('auto-seconds-label');
 const groupSizeSelect = document.getElementById('group-size');
@@ -407,6 +408,12 @@ function skipDigits(n) {
 
 function skipNextDigit() { skipDigits(1); }
 
+function updateSequenceDigitsHint() {
+  const def = SEQUENCES[state.sequenceId];
+  if (!def) return;
+  sequenceDigitsHintEl.textContent = `${def.digits.length.toLocaleString()} digits available`;
+}
+
 // ---- Sequence selection ----
 function applySequence(id) {
   const def = SEQUENCES[id];
@@ -432,6 +439,7 @@ function applySequence(id) {
   // across reloads, so without this the select can show a stale
   // sequence when the app actually re-initialised back to the default.
   if (sequenceSelect.value !== id) sequenceSelect.value = id;
+  updateSequenceDigitsHint();
 }
 
 sequenceSelect.addEventListener('change', () => {
@@ -1549,6 +1557,8 @@ function loadLongPi() {
         // Re-score entries that may have been beyond the short fallback
         computeStatuses();
         render();
+        // The hint reflects the active sequence's length, so refresh it.
+        updateSequenceDigitsHint();
       }
     }
   };
