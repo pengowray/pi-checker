@@ -880,7 +880,7 @@ input[type="range"]:disabled {
    moves to the right column, everything else stacks in the left column;
    actions span the full width below. The footer hint and the header
    subtitle are hidden to reclaim vertical room. */
-@media (orientation: landscape) and (max-height: 600px) {
+@media (orientation: landscape) and (max-height: 700px) {
   header { padding: 0.4rem 0.9rem; }
   header h1 { font-size: 1.1rem; letter-spacing: 0.3px; }
   .subtitle { display: none; }
