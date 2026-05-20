@@ -329,3 +329,45 @@ test('on-idle: timer resets on each keystroke (no digit is checked while typing 
   expect(classes.every(c => /\bpending\b/.test(c))).toBe(false);
   expect(classes.filter(c => /\bcorrect\b/.test(c))).toHaveLength(3);
 });
+
+// ---- Render performance ----
+//
+// With 10k entries already on screen, adding one more digit should be a
+// near-instant operation. This regression-tests the incremental render —
+// the previous version rebuilt all 10k+1 DOM nodes per keystroke and
+// would blow well past any sensible threshold here.
+test('render: adding one digit at 10k entries stays cheap', async ({ page }) => {
+  // Skip auto-check so we don't pay timer-tick cost during the seed phase.
+  await page.locator('#settings-toggle').click();
+  await page.locator('#auto-seconds').evaluate((el) => {
+    el.value = '31';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('#settings-close').click();
+
+  // Seed via paste so we don't pay 10k keystroke costs in the test itself.
+  // Long pi loads async — wait for it before pasting.
+  await page.waitForFunction(() => {
+    return typeof window.PI_LONG_DIGITS === 'string' && window.PI_LONG_DIGITS.length >= 10000;
+  });
+  await page.evaluate(() => {
+    const text = window.PI_LONG_DIGITS.slice(0, 10000);
+    const dt = new DataTransfer();
+    dt.setData('text', text);
+    const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true });
+    document.dispatchEvent(ev);
+  });
+  // Sanity: 10k digits landed.
+  await expect(page.locator('#stat-skipped')).toHaveText(/^10,?000$/);
+
+  // Measure: one keystroke at the 10k mark should be well under 150ms.
+  // The pre-incremental render took ~500ms+ at this size, so this catches a
+  // regression with room for CI jitter (typical local run is 30-60ms).
+  const ms = await page.evaluate(async () => {
+    const start = performance.now();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+    await new Promise(r => requestAnimationFrame(r));
+    return performance.now() - start;
+  });
+  expect(ms).toBeLessThan(150);
+});

@@ -391,6 +391,7 @@ function skipDigits(n) {
   const remaining = state.digits.length - state.entries.length;
   const count = Math.min(Math.max(0, n | 0), remaining);
   if (count === 0) return 0;
+  const firstNewIdx = state.entries.length;
   for (let i = 0; i < count; i++) {
     const t = state.startTime === null ? null : (performance.now() - state.startTime);
     state.entries.push({
@@ -403,7 +404,7 @@ function skipDigits(n) {
       missedBefore: [],
     });
   }
-  computeStatuses();
+  computeStatuses(firstNewIdx);
   render();
   return count;
 }
@@ -763,7 +764,7 @@ function inputDigit(d) {
     _timerId: null,
   };
   state.entries.push(entry);
-  computeStatuses();
+  computeStatuses(state.entries.length - 1);
   if (useOnIdleAutoCheck()) {
     resetAutoCheckTimer();
   } else {
@@ -819,6 +820,7 @@ function inputPaste(text) {
     return;
   }
 
+  const firstNewIdx = state.entries.length;
   for (let k = startIdx; k < digits.length; k++) {
     const t = state.startTime === null ? null : (performance.now() - state.startTime);
     state.entries.push({
@@ -832,7 +834,7 @@ function inputPaste(text) {
     });
   }
 
-  computeStatuses();
+  computeStatuses(firstNewIdx);
   checkHardcoreFail();
   render();
 }
@@ -865,7 +867,9 @@ function backspace() {
     popped._timerId = null;
   }
   if (state.entries.length === 0) state.integerCharsConsumed = 0;
-  computeStatuses();
+  // After popping the tail, lookahead-affected entries are within the
+  // last 3 positions; pass the new length-1 so we resume from there.
+  computeStatuses(Math.max(0, state.entries.length - 1));
   if (useOnIdleAutoCheck()) {
     resetAutoCheckTimer();
   }
@@ -983,13 +987,23 @@ function markAllChecked() {
 }
 
 // ---- Status computation ----
-function computeStatuses() {
+//
+// `fromIdx` is the lowest index that may have changed since the last call.
+// Statuses use a 2-entry lookahead, so we resume from `fromIdx - 2` and
+// reuse the cached `seqIdxAfter` of the entry just before. With 50k
+// entries the full O(n) recompute on every keystroke is the dominant cost
+// of typing — this lets us touch only the tail. Pass 0 for a full
+// recompute (the default).
+function computeStatuses(fromIdx = 0) {
   const entries = state.entries;
   const digits = state.digits;
-  let seqIdx = 0;
+  // Re-analyze starting 2 entries earlier so lookahead-affected entries
+  // (i+1, i+2) catch up.
+  const startI = Math.max(0, fromIdx - 2);
+  let seqIdx = startI > 0 ? entries[startI - 1].seqIdxAfter : 0;
 
   // Skip-aware walk
-  for (let i = 0; i < entries.length; i++) {
+  for (let i = startI; i < entries.length; i++) {
     const e = entries[i];
     e.missedBefore = [];
     e.skipConfirms = false;
@@ -1037,146 +1051,212 @@ function computeStatuses() {
   }
 
   // Position in the sequence the next typed digit will land at.
-  state.nextSeqIdx = seqIdx;
+  state.nextSeqIdx = entries.length > 0 ? entries[entries.length - 1].seqIdxAfter : 0;
 
   // Mark the next two entries after each skip as the skip's "confirming"
   // digits. Deleting one of these unwinds the skip and so should count as
   // erasing an error, unless the digit would have been correct at its
-  // literal position anyway (the correctNoSkip check below).
-  for (let i = 0; i < entries.length; i++) {
+  // literal position anyway (the correctNoSkip check below). Reset only
+  // [startI..end]; entries before that are unchanged from the previous
+  // run, but we still walk back 2 because a skip just before startI can
+  // mark targets at startI / startI+1.
+  for (let i = startI; i < entries.length; i++) {
+    entries[i].skipConfirms = false;
+  }
+  for (let i = Math.max(0, startI - 2); i < entries.length; i++) {
     if (entries[i].missedBefore && entries[i].missedBefore.length > 0) {
-      if (entries[i + 1]) entries[i + 1].skipConfirms = true;
-      if (entries[i + 2]) entries[i + 2].skipConfirms = true;
+      if (entries[i + 1] && i + 1 >= startI) entries[i + 1].skipConfirms = true;
+      if (entries[i + 2] && i + 2 >= startI) entries[i + 2].skipConfirms = true;
     }
   }
 
   // No-skip walk: would this entry be correct at its literal position
-  // (one pi digit per typed digit, no skipping)?
-  for (let i = 0; i < entries.length; i++) {
+  // (one pi digit per typed digit, no skipping)? Only the re-analyzed
+  // range needs updating; earlier entries' correctNoSkip is positional
+  // and stable.
+  for (let i = startI; i < entries.length; i++) {
     const e = entries[i];
     e.correctNoSkip = i < digits.length && e.char === digits[i];
   }
 }
 
 // ---- Render ----
+//
+// Incremental: each entry maps to a short run of sibling nodes under
+// #user-digits (missed markers, the main digit, optional prime-space).
+// A fingerprint per entry encodes its visual state; on render we only
+// rebuild and swap entries whose fingerprint changed, so typing one digit
+// at the 50,000-digit mark is ~1 DOM mutation rather than 50,000.
+//
+// Trade-off vs. the old approach: group spacing is per-entry now (a
+// `margin-right` on every Nth main digit) instead of a wrapping
+// <span class="group">. Missed markers no longer count toward group
+// position, so group widths stay uniform.
+let renderCache = [];
+let lastRenderContextKey = '';
+
+// A literal " " inside an inline-block can collapse to near-zero width in
+// some browsers, so spaces are rendered as NBSP and given an explicit
+// min-width class.
+function setCharText(el, char) {
+  if (char === ' ') {
+    el.classList.add('space-char');
+    el.textContent = ' ';
+  } else {
+    el.textContent = char;
+  }
+}
+
+function buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter) {
+  const nodes = [];
+  if (e.checked) {
+    for (const s of e.missedBefore) {
+      const m = document.createElement('span');
+      m.className = 'digit missed-marker';
+      setCharText(m, s);
+      m.title = 'missed digit';
+      nodes.push(m);
+    }
+  }
+  const main = document.createElement('span');
+  if (e.checked) {
+    let cls = 'digit ' + e.status;
+    if (e.skipped) cls += ' skipped';
+    const showDiff = ((ctx.inComp && ctx.competitiveEnded) || ctx.inPracticeAnnot)
+      && e.status === 'wrong' && e.expected;
+    const showMask = ctx.inComp && !ctx.competitiveEnded && e.status === 'wrong';
+    if (showDiff) {
+      cls += ' diff';
+      main.className = cls;
+      const correctionEl = document.createElement('span');
+      correctionEl.className = 'correction';
+      setCharText(correctionEl, e.expected);
+      const typedEl = document.createElement('span');
+      typedEl.className = 'typed';
+      setCharText(typedEl, e.char);
+      main.appendChild(correctionEl);
+      main.appendChild(typedEl);
+    } else if (showMask) {
+      cls += ' masked';
+      main.className = cls;
+      main.textContent = '·';
+    } else {
+      main.className = cls;
+      setCharText(main, e.char);
+    }
+    if (e.status === 'wrong' && e.expected) {
+      main.title = 'typed ' + e.char + ', expected ' + e.expected;
+    } else if (e.skipped) {
+      main.title = 'skipped';
+    }
+  } else {
+    main.className = 'digit pending';
+    if (e.autoCheckStartedAt != null && ctx.autoCheckSeconds > 0 && !ctx.isManual) {
+      main.classList.add('auto-filling');
+      const totalMs = ctx.autoCheckSeconds * 1000;
+      const elapsed = Math.max(0, performance.now() - e.autoCheckStartedAt);
+      main.style.setProperty('--fill-duration', totalMs + 'ms');
+      main.style.setProperty('--fill-delay', `-${elapsed}ms`);
+    }
+    setCharText(main, e.char);
+  }
+  if (isGroupEnd) main.classList.add('group-end');
+  nodes.push(main);
+  if (hasPrimeAfter) {
+    const ps = document.createElement('span');
+    ps.className = 'prime-space';
+    ps.textContent = ' ';
+    nodes.push(ps);
+  }
+  return nodes;
+}
+
+function computeEntryFingerprint(e, ctx, isGroupEnd, hasPrimeAfter) {
+  // Pending entries only depend on char + auto-fill animation state. The
+  // started-at timestamp is floored so a same-frame re-render doesn't
+  // replace the node (which would restart the CSS animation).
+  if (!e.checked) {
+    const t = e.autoCheckStartedAt != null ? Math.floor(e.autoCheckStartedAt) : '';
+    return 'p|' + e.char + '|' + t + '|' + ctx.autoCheckSeconds + '|' +
+      (ctx.isManual ? 1 : 0) + '|' +
+      (isGroupEnd ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
+  }
+  return 'c|' + e.char + '|' + e.status + '|' + (e.expected || '') + '|' +
+    (e.skipped ? 1 : 0) + '|' + e.missedBefore.join(',') + '|' +
+    (ctx.inComp ? 1 : 0) + '|' + (ctx.competitiveEnded ? 1 : 0) + '|' +
+    (ctx.inPracticeAnnot ? 1 : 0) + '|' +
+    (isGroupEnd ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
+}
+
 function render() {
-  const frag = document.createDocumentFragment();
-  let correct = 0, wrong = 0, missed = 0, skipped = 0;
-  let pos = 0;
-  let currentGroup = null;
   const def = SEQUENCES[state.sequenceId];
   // Sequences with their own natural spacing (e.g. primes) override the
   // user-selected grouping — the prime boundaries are the grouping.
   const gs = (def && def.naturalSpaces) ? 0 : state.groupSize;
   const primeBoundaries = def && def.primeBoundaries;
-  let seqPos = 0; // walk the sequence position alongside entries, for primeBoundaries
 
-  function appendItem(span) {
-    if (gs > 0) {
-      if (pos % gs === 0) {
-        currentGroup = document.createElement('span');
-        currentGroup.className = 'group';
-        frag.appendChild(currentGroup);
-      }
-      currentGroup.appendChild(span);
-    } else {
-      frag.appendChild(span);
+  const ctx = {
+    inComp: state.mode === 'competitive',
+    competitiveEnded: state.competitiveEnded,
+    inPracticeAnnot: state.mode === 'practice' && state.practiceDisplay === 'annotations',
+    autoCheckSeconds: state.autoCheckSeconds,
+    isManual: isManual(),
+  };
+
+  // Sequence/grouping changes invalidate every entry anyway; full rebuild
+  // beats comparing 50k fingerprints in those cases.
+  const ctxKey = state.sequenceId + '|' + gs + '|' + (primeBoundaries ? '1' : '0');
+  if (lastRenderContextKey !== ctxKey) {
+    renderCache = [];
+    userDigitsEl.replaceChildren();
+    lastRenderContextKey = ctxKey;
+  }
+
+  const entries = state.entries;
+  let correct = 0, wrong = 0, missed = 0, skipped = 0;
+  let seqPos = 0;
+
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    const seqAfter = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
+    const isGroupEnd = gs > 0 && ((i + 1) % gs === 0);
+    const hasPrimeAfter = !!(primeBoundaries && primeBoundaries.has(seqAfter));
+    const fp = computeEntryFingerprint(e, ctx, isGroupEnd, hasPrimeAfter);
+
+    if (i >= renderCache.length) {
+      const nodes = buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter);
+      const frag = document.createDocumentFragment();
+      for (const n of nodes) frag.appendChild(n);
+      userDigitsEl.appendChild(frag);
+      renderCache.push({ fp, nodes });
+    } else if (renderCache[i].fp !== fp) {
+      const old = renderCache[i];
+      const newNodes = buildEntryNodes(e, ctx, isGroupEnd, hasPrimeAfter);
+      const frag = document.createDocumentFragment();
+      for (const n of newNodes) frag.appendChild(n);
+      userDigitsEl.insertBefore(frag, old.nodes[0]);
+      for (const n of old.nodes) n.remove();
+      renderCache[i] = { fp, nodes: newNodes };
     }
-    pos += 1;
-  }
 
-  function maybeAppendPrimeBoundary() {
-    if (!primeBoundaries || !primeBoundaries.has(seqPos)) return;
-    const space = document.createElement('span');
-    space.className = 'prime-space';
-    space.textContent = ' ';
-    frag.appendChild(space);
-  }
-
-  // A literal " " text node inside an inline-block can collapse to a near-
-  // zero width in some browsers, so spaces are rendered as NBSP and given an
-  // explicit width class so they always read as a visible gap.
-  function setCharText(el, char) {
-    if (char === ' ') {
-      el.classList.add('space-char');
-      el.textContent = ' ';
-    } else {
-      el.textContent = char;
-    }
-  }
-
-  for (const e of state.entries) {
     if (e.checked) {
-      for (const s of e.missedBefore) {
-        const span = document.createElement('span');
-        span.className = 'digit missed-marker';
-        setCharText(span, s);
-        span.title = 'missed digit';
-        appendItem(span);
-        missed += 1;
-        seqPos += 1;
-        maybeAppendPrimeBoundary();
-      }
-      const span = document.createElement('span');
-      let cls = 'digit ' + e.status;
-      if (e.skipped) cls += ' skipped';
-      const inComp = state.mode === 'competitive';
-      const inPracticeAnnot = state.mode === 'practice' && state.practiceDisplay === 'annotations';
-      const showDiff = ((inComp && state.competitiveEnded) || inPracticeAnnot) && e.status === 'wrong' && e.expected;
-      const showMask = inComp && !state.competitiveEnded && e.status === 'wrong';
-      if (showDiff) {
-        cls += ' diff';
-        span.className = cls;
-        const correctionEl = document.createElement('span');
-        correctionEl.className = 'correction';
-        setCharText(correctionEl, e.expected);
-        const typedEl = document.createElement('span');
-        typedEl.className = 'typed';
-        setCharText(typedEl, e.char);
-        span.appendChild(correctionEl);
-        span.appendChild(typedEl);
-      } else if (showMask) {
-        cls += ' masked';
-        span.className = cls;
-        span.textContent = '·';
-      } else {
-        span.className = cls;
-        setCharText(span, e.char);
-      }
-      if (e.status === 'wrong' && e.expected) {
-        span.title = 'typed ' + e.char + ', expected ' + e.expected;
-      } else if (e.skipped) {
-        span.title = 'skipped';
-      }
-      appendItem(span);
+      missed += e.missedBefore.length;
       if (e.status === 'correct') {
         if (e.skipped) skipped += 1;
         else correct += 1;
       } else if (e.status === 'wrong') {
         wrong += 1;
       }
-      // For primes (no-spaces) sequence, inject a visual space whenever the
-      // sequence position reaches a prime boundary.
-      seqPos = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
-      maybeAppendPrimeBoundary();
-    } else {
-      const span = document.createElement('span');
-      span.className = 'digit pending';
-      if (e.autoCheckStartedAt != null && state.autoCheckSeconds > 0 && !isManual()) {
-        span.classList.add('auto-filling');
-        const totalMs = state.autoCheckSeconds * 1000;
-        const elapsed = Math.max(0, performance.now() - e.autoCheckStartedAt);
-        span.style.setProperty('--fill-duration', totalMs + 'ms');
-        span.style.setProperty('--fill-delay', `-${elapsed}ms`);
-      }
-      setCharText(span, e.char);
-      appendItem(span);
-      seqPos = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
-      maybeAppendPrimeBoundary();
     }
+    seqPos = seqAfter;
   }
 
-  userDigitsEl.replaceChildren(frag);
+  // Trim if entries got shorter (backspace, clearSession, …).
+  while (renderCache.length > entries.length) {
+    const c = renderCache.pop();
+    for (const n of c.nodes) n.remove();
+  }
+
   piDisplayEl.classList.toggle('grouped', gs > 0);
   piDisplayEl.classList.toggle('diff-mode',
     (state.mode === 'competitive' && state.competitiveEnded) ||
