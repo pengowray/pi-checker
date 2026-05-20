@@ -519,6 +519,14 @@ input[type="range"]:disabled {
   margin: 0 0.05em;
 }
 
+/* Visual separator injected between primes when the sequence has natural
+   spacing (only relevant for the primes sequence, where the user types just
+   digits and we group them visually by prime). */
+.prime-space {
+  display: inline-block;
+  width: 0.45em;
+}
+
 .cursor {
   display: inline-block;
   color: var(--accent);
@@ -646,6 +654,28 @@ input[type="range"]:disabled {
     "k1 k2 k3"
     "kc k0 kb";
 }
+
+/* When the current sequence treats spaces as input (e.g. primes-spaced),
+   show an extra full-width spacebar row below the standard 3x4 grid. */
+.keypad-decimal.with-space {
+  grid-template-areas:
+    "k1 k2 k3"
+    "k4 k5 k6"
+    "k7 k8 k9"
+    "kc k0 kb"
+    "ksp ksp ksp";
+}
+.keypad-decimal.with-space.flipped {
+  grid-template-areas:
+    "k7 k8 k9"
+    "k4 k5 k6"
+    "k1 k2 k3"
+    "kc k0 kb"
+    "ksp ksp ksp";
+}
+
+.keypad [data-digit=" "] { grid-area: ksp; }
+.keypad-decimal:not(.with-space) [data-digit=" "] { display: none; }
 
 .keypad-hex {
   grid-template-columns: repeat(4, 1fr);

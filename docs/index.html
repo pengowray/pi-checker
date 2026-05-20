@@ -57,6 +57,7 @@
       <button class="key key-check" data-action="check" aria-label="Check">&#x2713;</button>
       <button class="key" data-digit="0">0</button>
       <button class="key key-back" data-action="back" aria-label="Backspace">&#x232B;</button>
+      <button class="key key-space" data-digit=" " aria-label="Space">&#x2423;</button>
     </section>
 
     <section class="keypad keypad-hex" id="keypad-hex" role="group" aria-label="Hex keypad" hidden>
@@ -109,10 +110,13 @@
           </div>
           <select id="sequence" class="setting-select">
             <option value="pi">&pi; (pi)</option>
+            <option value="tau">&tau; (tau = 2&pi;)</option>
             <option value="phi">&phi; (golden ratio)</option>
             <option value="sqrt2">&radic;2</option>
             <option value="pi-binary">&pi; in binary</option>
             <option value="pi-hex">&pi; in hex</option>
+            <option value="primes">Primes</option>
+            <option value="primes-spaced">Primes (spaced)</option>
           </select>
         </div>
 

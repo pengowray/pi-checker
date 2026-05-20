@@ -33,6 +33,15 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: SHORT_PI,
   },
+  tau: {
+    label: 'τ (tau = 2π)',
+    shortLabel: 'τ',
+    titleHtml: '&tau; Checker',
+    integerPart: '6',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '', // derived from pi at load time and again when pi-long loads
+  },
   phi: {
     label: 'φ (golden ratio)',
     shortLabel: 'φ',
@@ -69,6 +78,27 @@ const SEQUENCES = {
     keypadType: 'hex',
     digits: '',
   },
+  primes: {
+    label: 'Primes',
+    shortLabel: 'primes',
+    titleHtml: 'Primes',
+    integerPart: '',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',          // filled by setupPrimes()
+    primeBoundaries: null, // Set of cumulative digit-positions where each prime ends
+    naturalSpaces: true,
+  },
+  'primes-spaced': {
+    label: 'Primes (spaced)',
+    shortLabel: 'primes',
+    titleHtml: 'Primes',
+    integerPart: '',
+    alphabet: '0123456789 ',
+    keypadType: 'decimal',
+    digits: '',
+    naturalSpaces: true,
+  },
 };
 
 // Pull in the bundled secondary sequences
@@ -79,6 +109,54 @@ if (window.SEQUENCE_DATA) {
     }
   }
 }
+
+// ---- Derived sequences ----
+function doubleDigitString(s) {
+  let carry = 0;
+  let out = '';
+  for (let i = s.length - 1; i >= 0; i--) {
+    const d = s.charCodeAt(i) - 48; // '0' = 48
+    const v = d * 2 + carry;
+    out = String.fromCharCode(48 + (v % 10)) + out;
+    carry = (v / 10) | 0;
+  }
+  if (carry) out = String(carry) + out;
+  return out;
+}
+
+function deriveTau() {
+  const pi = SEQUENCES.pi;
+  const doubled = doubleDigitString(pi.integerPart + pi.digits);
+  // Pi's integer part is "3", so doubling never produces a leading carry.
+  // Align tau's integer-part length with pi's.
+  const intLen = pi.integerPart.length;
+  SEQUENCES.tau.integerPart = doubled.slice(0, intLen);
+  SEQUENCES.tau.digits = doubled.slice(intLen);
+}
+deriveTau();
+
+(function setupPrimes() {
+  const N = 100000;
+  const sieve = new Uint8Array(N + 1);
+  const primes = [];
+  for (let i = 2; i <= N; i++) {
+    if (sieve[i]) continue;
+    primes.push(i);
+    for (let j = i * i; j <= N; j += i) sieve[j] = 1;
+  }
+  const boundaries = new Set();
+  let pos = 0;
+  let joined = '';
+  for (const p of primes) {
+    const s = String(p);
+    joined += s;
+    pos += s.length;
+    boundaries.add(pos);
+  }
+  SEQUENCES.primes.digits = joined;
+  SEQUENCES.primes.primeBoundaries = boundaries;
+  SEQUENCES['primes-spaced'].digits = primes.join(' ');
+})();
 
 // ---- Constants ----
 const MODE_FIXED_DELAY = { competitive: 2, hardcore: 0 };
@@ -269,11 +347,14 @@ function applySequence(id) {
   state.alphabet = def.alphabet;
   state.keypadType = def.keypadType;
   state.integerCharsConsumed = 0;
-  prefixEl.textContent = def.integerPart + '.';
+  prefixEl.textContent = def.integerPart ? def.integerPart + '.' : '';
+  prefixEl.hidden = !def.integerPart;
   appTitleEl.innerHTML = def.titleHtml;
   // Swap keypad layout
   keypadDecimal.hidden = def.keypadType !== 'decimal';
   keypadHex.hidden = def.keypadType !== 'hex';
+  // Show the space key only when the alphabet uses spaces.
+  keypadDecimal.classList.toggle('with-space', def.alphabet.includes(' '));
 }
 
 sequenceSelect.addEventListener('change', () => {
@@ -544,6 +625,14 @@ function inputDigit(d) {
   d = d.toUpperCase();
   if (!state.alphabet.includes(d)) return;
 
+  // Collapse consecutive spaces: a second space in a row is silently ignored
+  // so users don't get penalised for double-tapping the space bar.
+  if (d === ' ') {
+    if (state.entries.length === 0) return;
+    const last = state.entries[state.entries.length - 1];
+    if (last.char === ' ') return;
+  }
+
   practiceResume();
 
   // Silently absorb leading integer-part chars (e.g. user types "3" first
@@ -580,8 +669,16 @@ function inputPaste(text) {
   if (isInputLocked()) return;
   const upper = text.toUpperCase();
   const digits = [];
+  // Track the previous char so we can collapse consecutive spaces in the
+  // pasted text (mirroring how live typing ignores double-spaces).
+  let prevChar = state.entries.length > 0
+    ? state.entries[state.entries.length - 1].char
+    : '';
   for (const c of upper) {
-    if (state.alphabet.includes(c)) digits.push(c);
+    if (!state.alphabet.includes(c)) continue;
+    if (c === ' ' && prevChar === ' ') continue;
+    digits.push(c);
+    prevChar = c;
   }
   if (digits.length === 0) return;
 
@@ -731,6 +828,7 @@ function computeStatuses() {
     if (seqIdx >= digits.length) {
       e.status = 'wrong';
       e.expected = null;
+      e.seqIdxAfter = seqIdx;
       continue;
     }
 
@@ -738,6 +836,7 @@ function computeStatuses() {
       e.status = 'correct';
       e.expected = digits[seqIdx];
       seqIdx += 1;
+      e.seqIdxAfter = seqIdx;
       continue;
     }
 
@@ -765,6 +864,7 @@ function computeStatuses() {
       e.expected = digits[seqIdx];
       seqIdx += 1;
     }
+    e.seqIdxAfter = seqIdx;
   }
 
   // Position in the sequence the next typed digit will land at.
@@ -795,7 +895,12 @@ function render() {
   let correct = 0, wrong = 0, missed = 0, skipped = 0;
   let pos = 0;
   let currentGroup = null;
-  const gs = state.groupSize;
+  const def = SEQUENCES[state.sequenceId];
+  // Sequences with their own natural spacing (e.g. primes) override the
+  // user-selected grouping — the prime boundaries are the grouping.
+  const gs = (def && def.naturalSpaces) ? 0 : state.groupSize;
+  const primeBoundaries = def && def.primeBoundaries;
+  let seqPos = 0; // walk the sequence position alongside entries, for primeBoundaries
 
   function appendItem(span) {
     if (gs > 0) {
@@ -811,6 +916,14 @@ function render() {
     pos += 1;
   }
 
+  function maybeAppendPrimeBoundary() {
+    if (!primeBoundaries || !primeBoundaries.has(seqPos)) return;
+    const space = document.createElement('span');
+    space.className = 'prime-space';
+    space.textContent = ' ';
+    frag.appendChild(space);
+  }
+
   for (const e of state.entries) {
     if (e.checked) {
       for (const s of e.missedBefore) {
@@ -820,6 +933,8 @@ function render() {
         span.title = 'missed digit';
         appendItem(span);
         missed += 1;
+        seqPos += 1;
+        maybeAppendPrimeBoundary();
       }
       const span = document.createElement('span');
       let cls = 'digit ' + e.status;
@@ -859,11 +974,17 @@ function render() {
       } else if (e.status === 'wrong') {
         wrong += 1;
       }
+      // For primes (no-spaces) sequence, inject a visual space whenever the
+      // sequence position reaches a prime boundary.
+      seqPos = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
+      maybeAppendPrimeBoundary();
     } else {
       const span = document.createElement('span');
       span.className = 'digit pending';
       span.textContent = e.char;
       appendItem(span);
+      seqPos = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
+      maybeAppendPrimeBoundary();
     }
   }
 
@@ -1232,8 +1353,10 @@ function loadLongPi() {
   script.onload = () => {
     if (typeof window.PI_LONG_DIGITS === 'string' && window.PI_LONG_DIGITS.length > SEQUENCES.pi.digits.length) {
       SEQUENCES.pi.digits = window.PI_LONG_DIGITS;
-      if (state.sequenceId === 'pi') {
-        state.digits = SEQUENCES.pi.digits;
+      // Tau is derived from pi, so its length grows in step.
+      deriveTau();
+      if (state.sequenceId === 'pi' || state.sequenceId === 'tau') {
+        state.digits = SEQUENCES[state.sequenceId].digits;
         // Re-score entries that may have been beyond the short fallback
         computeStatuses();
         render();
