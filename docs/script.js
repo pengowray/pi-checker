@@ -109,7 +109,7 @@ const state = {
   mode: 'practice',
   autoCheckSeconds: DEFAULT_PRACTICE_DELAY,
   practiceDelay: DEFAULT_PRACTICE_DELAY, // remember user's choice for practice mode
-  // Each entry: { char, t, pasted, checked, status, expected, skippedBefore }
+  // Each entry: { char, t, skipped, checked, status, expected, missedBefore }
   entries: [],
   startTime: null,
   autoCheckTimer: null,
@@ -160,7 +160,7 @@ const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
 const resetBtns = document.querySelectorAll('.setting-reset');
-const pastedTile = document.getElementById('stat-pasted-tile');
+const skippedTile = document.getElementById('stat-skipped-tile');
 const skipModal = document.getElementById('skip-modal');
 const skipOneBtn = document.getElementById('skip-one');
 const skipConfirmBtn = document.getElementById('skip-confirm');
@@ -168,8 +168,8 @@ const skipCountInput = document.getElementById('skip-count');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
+const statMissed = document.getElementById('stat-missed');
 const statSkipped = document.getElementById('stat-skipped');
-const statPasted = document.getElementById('stat-pasted');
 const statErased = document.getElementById('stat-erased');
 const statTime = document.getElementById('stat-time');
 
@@ -226,17 +226,17 @@ practiceDisplayInputs.forEach(input => {
   });
 });
 
-// ---- Paste next digit(s) ----
+// ---- Skip next digit(s) ----
 // Practice: works any time. Competitive/Hardcore: only before the clock starts.
-function canPasteSkip() {
+function canSkip() {
   if (isInputLocked()) return false;
   if (state.entries.length >= state.digits.length) return false;
   if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime !== null) return false;
   return true;
 }
 
-function pasteSkipDigits(n) {
-  if (!canPasteSkip()) return 0;
+function skipDigits(n) {
+  if (!canSkip()) return 0;
   const remaining = state.digits.length - state.entries.length;
   const count = Math.min(Math.max(0, n | 0), remaining);
   if (count === 0) return 0;
@@ -245,11 +245,11 @@ function pasteSkipDigits(n) {
     state.entries.push({
       char: state.digits[state.entries.length],
       t: t,
-      pasted: true,
+      skipped: true,
       checked: true,
       status: 'pending',
       expected: null,
-      skippedBefore: [],
+      missedBefore: [],
     });
   }
   computeStatuses();
@@ -257,7 +257,7 @@ function pasteSkipDigits(n) {
   return count;
 }
 
-function pasteNextDigit() { pasteSkipDigits(1); }
+function skipNextDigit() { skipDigits(1); }
 
 // ---- Sequence selection ----
 function applySequence(id) {
@@ -564,11 +564,11 @@ function inputDigit(d) {
   state.entries.push({
     char: d,
     t: t,
-    pasted: false,
+    skipped: false,
     checked: false,
     status: 'pending',
     expected: null,
-    skippedBefore: [],
+    missedBefore: [],
   });
   computeStatuses();
   resetAutoCheckTimer();
@@ -616,11 +616,11 @@ function inputPaste(text) {
     state.entries.push({
       char: digits[k],
       t: t,
-      pasted: true,
+      skipped: true,
       checked: true,
       status: 'pending',
       expected: null,
-      skippedBefore: [],
+      missedBefore: [],
     });
   }
 
@@ -636,14 +636,14 @@ function backspace() {
   const last = state.entries[state.entries.length - 1];
   if (state.mode === 'competitive') {
     if (last.checked && last.status === 'wrong') return;
-    if (last.pasted) return; // pasted digits in competitive can't be erased
+    if (last.skipped) return; // skipped digits in competitive can't be erased
   }
 
   // Displayed "Erased" counter: only the errors the user actually saw,
-  // plus pasted digits (any erase undoes that paste).
+  // plus skipped digits (any erase undoes that skip).
   if (last.checked) {
     if (last.status === 'wrong' ||
-        last.pasted ||
+        last.skipped ||
         (last.skipConfirms && !last.correctNoSkip)) {
       state.erasedErrors += 1;
     }
@@ -725,7 +725,7 @@ function computeStatuses() {
   // Skip-aware walk
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    e.skippedBefore = [];
+    e.missedBefore = [];
     e.skipConfirms = false;
 
     if (seqIdx >= digits.length) {
@@ -741,7 +741,7 @@ function computeStatuses() {
       continue;
     }
 
-    let skipped = 0;
+    let missed = 0;
     for (let k = 1; k <= 2; k++) {
       if (seqIdx + k >= digits.length) break;
       if (e.char !== digits[seqIdx + k]) continue;
@@ -750,16 +750,16 @@ function computeStatuses() {
       if (!n1 || !n2) continue;
       if (seqIdx + k + 2 >= digits.length) continue;
       if (n1.char === digits[seqIdx + k + 1] && n2.char === digits[seqIdx + k + 2]) {
-        skipped = k;
+        missed = k;
         break;
       }
     }
 
-    if (skipped > 0) {
-      for (let j = 0; j < skipped; j++) e.skippedBefore.push(digits[seqIdx + j]);
+    if (missed > 0) {
+      for (let j = 0; j < missed; j++) e.missedBefore.push(digits[seqIdx + j]);
       e.status = 'correct';
-      e.expected = digits[seqIdx + skipped];
-      seqIdx += skipped + 1;
+      e.expected = digits[seqIdx + missed];
+      seqIdx += missed + 1;
     } else {
       e.status = 'wrong';
       e.expected = digits[seqIdx];
@@ -775,7 +775,7 @@ function computeStatuses() {
   // erasing an error, unless the digit would have been correct at its
   // literal position anyway (the correctNoSkip check below).
   for (let i = 0; i < entries.length; i++) {
-    if (entries[i].skippedBefore && entries[i].skippedBefore.length > 0) {
+    if (entries[i].missedBefore && entries[i].missedBefore.length > 0) {
       if (entries[i + 1]) entries[i + 1].skipConfirms = true;
       if (entries[i + 2]) entries[i + 2].skipConfirms = true;
     }
@@ -792,7 +792,7 @@ function computeStatuses() {
 // ---- Render ----
 function render() {
   const frag = document.createDocumentFragment();
-  let correct = 0, wrong = 0, skipped = 0, pasted = 0;
+  let correct = 0, wrong = 0, missed = 0, skipped = 0;
   let pos = 0;
   let currentGroup = null;
   const gs = state.groupSize;
@@ -813,17 +813,17 @@ function render() {
 
   for (const e of state.entries) {
     if (e.checked) {
-      for (const s of e.skippedBefore) {
+      for (const s of e.missedBefore) {
         const span = document.createElement('span');
-        span.className = 'digit skipped-marker';
+        span.className = 'digit missed-marker';
         span.textContent = s;
-        span.title = 'skipped digit';
+        span.title = 'missed digit';
         appendItem(span);
-        skipped += 1;
+        missed += 1;
       }
       const span = document.createElement('span');
       let cls = 'digit ' + e.status;
-      if (e.pasted) cls += ' pasted';
+      if (e.skipped) cls += ' skipped';
       const inComp = state.mode === 'competitive';
       const inPracticeAnnot = state.mode === 'practice' && state.practiceDisplay === 'annotations';
       const showDiff = ((inComp && state.competitiveEnded) || inPracticeAnnot) && e.status === 'wrong' && e.expected;
@@ -849,12 +849,12 @@ function render() {
       }
       if (e.status === 'wrong' && e.expected) {
         span.title = 'typed ' + e.char + ', expected ' + e.expected;
-      } else if (e.pasted) {
-        span.title = 'pasted';
+      } else if (e.skipped) {
+        span.title = 'skipped';
       }
       appendItem(span);
       if (e.status === 'correct') {
-        if (e.pasted) pasted += 1;
+        if (e.skipped) skipped += 1;
         else correct += 1;
       } else if (e.status === 'wrong') {
         wrong += 1;
@@ -882,8 +882,8 @@ function render() {
 
   statCorrect.textContent = correct;
   statWrong.textContent = wrong;
+  statMissed.textContent = missed;
   statSkipped.textContent = skipped;
-  statPasted.textContent = pasted;
   statErased.textContent = state.erasedErrors;
 
   updateUI();
@@ -1078,10 +1078,10 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // "V" pastes the next sequence digit. Practice: any time;
+  // "V" skips the next sequence digit. Practice: any time;
   // Competitive/Hardcore: only before the clock starts.
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey) {
-    pasteNextDigit();
+    skipNextDigit();
     e.preventDefault();
     return;
   }
@@ -1178,7 +1178,7 @@ settingsModal.addEventListener('click', (e) => {
 
 // ---- Skip-digits modal ----
 function openSkipModal() {
-  if (!canPasteSkip()) return;
+  if (!canSkip()) return;
   skipCountInput.value = lastSkipAmount;
   skipModal.hidden = false;
   skipModal.setAttribute('aria-hidden', 'false');
@@ -1194,12 +1194,12 @@ function confirmSkipN() {
   const raw = parseInt(skipCountInput.value, 10);
   if (isNaN(raw) || raw < 1) return;
   lastSkipAmount = raw;
-  pasteSkipDigits(raw);
+  skipDigits(raw);
   closeSkipModal();
 }
 
-pastedTile.addEventListener('click', openSkipModal);
-pastedTile.addEventListener('keydown', (e) => {
+skippedTile.addEventListener('click', openSkipModal);
+skippedTile.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
     openSkipModal();
@@ -1207,7 +1207,7 @@ pastedTile.addEventListener('keydown', (e) => {
 });
 
 skipOneBtn.addEventListener('click', () => {
-  pasteSkipDigits(1);
+  skipDigits(1);
   closeSkipModal();
 });
 

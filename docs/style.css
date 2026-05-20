@@ -6,7 +6,7 @@
   --accent: #2563eb;
   --correct: #16a34a;
   --wrong: #dc2626;
-  --skipped: #d97706;
+  --missed: #d97706;
   --pending: #9ca3af;
   --key-bg: #ffffff;
   --key-hover: #f1f5f9;
@@ -23,7 +23,7 @@
   --accent: #60a5fa;
   --correct: #4ade80;
   --wrong: #f87171;
-  --skipped: #fbbf24;
+  --missed: #fbbf24;
   --pending: #6b7280;
   --key-bg: #1f232c;
   --key-hover: #262b36;
@@ -132,7 +132,7 @@ main {
 .comp-timer.dimmed { opacity: 0.18; }
 .comp-timer.dimmed:hover { opacity: 0.5; }
 
-.comp-timer.warning { color: var(--skipped); }
+.comp-timer.warning { color: var(--missed); }
 .comp-timer.danger {
   color: var(--wrong);
   animation: pulseTimer 1s ease-in-out infinite;
@@ -465,7 +465,7 @@ input[type="range"]:disabled {
 
 .digit { display: inline-block; }
 .digit.correct { color: var(--correct); }
-.digit.correct.pasted { color: var(--fg); opacity: 0.85; }
+.digit.correct.skipped { color: var(--fg); opacity: 0.85; }
 .digit.wrong {
   color: var(--wrong);
   text-decoration: underline;
@@ -511,8 +511,8 @@ input[type="range"]:disabled {
   text-decoration-thickness: 2px;
 }
 .digit.pending { color: var(--pending); }
-.digit.skipped-marker {
-  color: var(--skipped);
+.digit.missed-marker {
+  color: var(--missed);
   opacity: 0.65;
   font-size: 0.85em;
   vertical-align: 0.1em;
@@ -565,15 +565,15 @@ input[type="range"]:disabled {
 #stat-correct { color: var(--correct); }
 #stat-wrong { color: var(--wrong); }
 #stat-erased { color: var(--muted); }
-#stat-skipped { color: var(--skipped); }
-#stat-pasted { color: var(--muted); }
+#stat-missed { color: var(--missed); }
+#stat-skipped { color: var(--muted); }
 
-#stat-pasted-tile {
+#stat-skipped-tile {
   cursor: pointer;
   transition: background 0.1s, border-color 0.1s;
 }
-#stat-pasted-tile:hover { background: var(--key-hover); border-color: var(--muted); }
-#stat-pasted-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#stat-skipped-tile:hover { background: var(--key-hover); border-color: var(--muted); }
+#stat-skipped-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .skip-hint {
   margin: 0 0 0.9rem;

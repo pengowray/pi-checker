@@ -38,8 +38,8 @@
       <div><div class="stat-label">Correct</div><div class="stat-value" id="stat-correct">0</div></div>
       <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">0</div></div>
       <div><div class="stat-label">Erased</div><div class="stat-value" id="stat-erased">0</div></div>
-      <div><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">0</div></div>
-      <div id="stat-pasted-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Pasted digits — click to skip ahead"><div class="stat-label">Pasted</div><div class="stat-value" id="stat-pasted">0</div></div>
+      <div><div class="stat-label">Missed</div><div class="stat-value" id="stat-missed">0</div></div>
+      <div id="stat-skipped-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Skipped digits — click to skip ahead"><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">0</div></div>
     </section>
 
     <div class="keypad-hint" id="keypad-hint">Enter digit 1 of &pi;:</div>
@@ -220,7 +220,7 @@
         <button id="skip-close" aria-label="Close" data-close>&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="skip-hint">Mark the next digits as already known. They count as pasted.</p>
+        <p class="skip-hint">Mark the next digits as already known. They count as skipped.</p>
         <button id="skip-one" type="button" class="skip-quick">Skip 1 digit</button>
         <div class="skip-inline">
           <input type="number" id="skip-count" min="1" value="10">
