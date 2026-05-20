@@ -446,6 +446,38 @@ input[type="range"]:disabled {
   text-decoration: none;
   opacity: 0.85;
 }
+
+/* Diff view shown after a competitive session ends: typed digit struck
+   through with the correct pi digit floating above it. */
+.pi-display.diff-mode {
+  line-height: 2.2;
+}
+
+.digit.wrong.diff {
+  position: relative;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.digit.wrong.diff .correction {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.55em;
+  color: var(--correct);
+  font-weight: 500;
+  line-height: 1;
+  padding-bottom: 0.15em;
+  white-space: nowrap;
+}
+
+.digit.wrong.diff .typed {
+  color: var(--wrong);
+  text-decoration: line-through;
+  text-decoration-color: var(--wrong);
+  text-decoration-thickness: 2px;
+}
 .digit.pending { color: var(--pending); }
 .digit.skipped-marker {
   color: var(--skipped);

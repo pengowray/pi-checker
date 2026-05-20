@@ -753,10 +753,28 @@ function render() {
       const span = document.createElement('span');
       let cls = 'digit ' + e.status;
       if (e.pasted) cls += ' pasted';
-      const maskWrong = state.mode === 'competitive' && e.status === 'wrong';
-      if (maskWrong) cls += ' masked';
-      span.className = cls;
-      span.textContent = maskWrong ? '·' : e.char;
+      const inComp = state.mode === 'competitive';
+      const showDiff = inComp && state.competitiveEnded && e.status === 'wrong' && e.expected;
+      const showMask = inComp && !state.competitiveEnded && e.status === 'wrong';
+      if (showDiff) {
+        cls += ' diff';
+        span.className = cls;
+        const correctionEl = document.createElement('span');
+        correctionEl.className = 'correction';
+        correctionEl.textContent = e.expected;
+        const typedEl = document.createElement('span');
+        typedEl.className = 'typed';
+        typedEl.textContent = e.char;
+        span.appendChild(correctionEl);
+        span.appendChild(typedEl);
+      } else if (showMask) {
+        cls += ' masked';
+        span.className = cls;
+        span.textContent = '·';
+      } else {
+        span.className = cls;
+        span.textContent = e.char;
+      }
       if (e.status === 'wrong' && e.expected) {
         span.title = 'typed ' + e.char + ', expected ' + e.expected;
       } else if (e.pasted) {
@@ -779,6 +797,8 @@ function render() {
 
   userDigitsEl.replaceChildren(frag);
   piDisplayEl.classList.toggle('grouped', gs > 0);
+  piDisplayEl.classList.toggle('diff-mode',
+    state.mode === 'competitive' && state.competitiveEnded);
   // Defer to next frame so the new content is laid out before we measure
   // and scroll to the bottom; without this the scrollHeight reading can
   // lag a frame behind on some browsers.
