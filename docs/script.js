@@ -88,9 +88,11 @@ const STORAGE_KEYS = {
   practiceDelay: 'pi-practice-delay',
   groupSize: 'pi-group-size',
   keypadFlip: 'pi-keypad-flip',
+  practiceDisplay: 'pi-practice-display',
 };
 
 const DEFAULT_KEYPAD_FLIP = false;
+const DEFAULT_PRACTICE_DISPLAY = 'oneline';
 
 const state = {
   sequenceId: 'pi',
@@ -117,6 +119,7 @@ const state = {
   erasedPreCheck: 0, // wrong digits erased before they were checked; not displayed yet
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
+  practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
   compTimerHidden: false,
 };
 
@@ -146,6 +149,9 @@ const modeBadge = document.getElementById('mode-badge');
 const compTimerEl = document.getElementById('comp-timer');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
+const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
+const skipToInput = document.getElementById('skip-to');
+const skipToBtn = document.getElementById('skip-to-go');
 const resetBtns = document.querySelectorAll('.setting-reset');
 
 const statCorrect = document.getElementById('stat-correct');
@@ -196,6 +202,74 @@ keypadFlipInputs.forEach(input => {
     updateResetVisibility();
   });
 });
+
+// ---- Practice display ----
+practiceDisplayInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    state.practiceDisplay = input.value;
+    localStorage.setItem(STORAGE_KEYS.practiceDisplay, input.value);
+    updateResetVisibility();
+    render();
+  });
+});
+
+// ---- Skip to digit ----
+function skipToDigit(n) {
+  if (!n || n <= 0) return;
+  n = Math.min(n, state.digits.length);
+  if (state.entries.length > 0) {
+    const ok = confirm('This will reset your progress. Skip to digit ' + n + '?');
+    if (!ok) return;
+  }
+  clearSession();
+  for (let i = 0; i < n; i++) {
+    state.entries.push({
+      char: state.digits[i],
+      t: null,
+      pasted: true,
+      checked: true,
+      status: 'pending',
+      expected: null,
+      skippedBefore: [],
+    });
+  }
+  computeStatuses();
+  render();
+}
+
+skipToBtn.addEventListener('click', () => {
+  const n = parseInt(skipToInput.value, 10);
+  if (!isNaN(n) && n > 0) {
+    skipToDigit(n);
+    skipToInput.value = '';
+  }
+});
+skipToInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    skipToBtn.click();
+    e.preventDefault();
+  }
+});
+
+// ---- Paste next digit (V key in comp/hardcore before clock starts) ----
+function pasteNextDigit() {
+  if (state.mode !== 'competitive' && state.mode !== 'hardcore') return;
+  if (state.startTime !== null) return;
+  if (state.entries.length >= state.digits.length) return;
+  const d = state.digits[state.entries.length];
+  state.entries.push({
+    char: d,
+    t: null,
+    pasted: true,
+    checked: true,
+    status: 'pending',
+    expected: null,
+    skippedBefore: [],
+  });
+  computeStatuses();
+  render();
+}
 
 // ---- Sequence selection ----
 function applySequence(id) {
@@ -565,21 +639,20 @@ function backspace() {
   if (state.mode === 'hardcore') return;
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
-  if (state.mode === 'competitive' && last.checked && last.status === 'wrong') return;
+  if (state.mode === 'competitive') {
+    if (last.checked && last.status === 'wrong') return;
+    if (last.pasted) return; // pasted digits in competitive can't be erased
+  }
 
-  // Displayed "Erased" counter: only the errors the user actually saw.
-  // (1) checked wrong = was shown red, OR
-  // (2) checked skip-confirming digit that wouldn't be correct at its
-  //     literal position (erasing it unwinds the prior skip)
+  // Displayed "Erased" counter: only the errors the user actually saw,
+  // plus pasted digits (any erase undoes that paste).
   if (last.checked) {
-    if (last.status === 'wrong') {
-      state.erasedErrors += 1;
-    } else if (last.skipConfirms && !last.correctNoSkip) {
+    if (last.status === 'wrong' ||
+        last.pasted ||
+        (last.skipConfirms && !last.correctNoSkip)) {
       state.erasedErrors += 1;
     }
   } else if (last.status === 'wrong') {
-    // Tracked separately (not displayed yet) so we can show pre-check
-    // erasures in stats later on.
     state.erasedPreCheck += 1;
   }
 
@@ -754,7 +827,8 @@ function render() {
       let cls = 'digit ' + e.status;
       if (e.pasted) cls += ' pasted';
       const inComp = state.mode === 'competitive';
-      const showDiff = inComp && state.competitiveEnded && e.status === 'wrong' && e.expected;
+      const inPracticeAnnot = state.mode === 'practice' && state.practiceDisplay === 'annotations';
+      const showDiff = ((inComp && state.competitiveEnded) || inPracticeAnnot) && e.status === 'wrong' && e.expected;
       const showMask = inComp && !state.competitiveEnded && e.status === 'wrong';
       if (showDiff) {
         cls += ' diff';
@@ -798,7 +872,8 @@ function render() {
   userDigitsEl.replaceChildren(frag);
   piDisplayEl.classList.toggle('grouped', gs > 0);
   piDisplayEl.classList.toggle('diff-mode',
-    state.mode === 'competitive' && state.competitiveEnded);
+    (state.mode === 'competitive' && state.competitiveEnded) ||
+    (state.mode === 'practice' && state.practiceDisplay === 'annotations'));
   // Defer to next frame so the new content is laid out before we measure
   // and scroll to the bottom; without this the scrollHeight reading can
   // lag a frame behind on some browsers.
@@ -984,8 +1059,7 @@ compTimerEl.addEventListener('keydown', (e) => {
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
-  if (tag === 'INPUT' && e.target.type === 'range') return;
-  if (tag === 'SELECT') return;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
   if ((e.ctrlKey || e.metaKey) && (e.key === 'v' || e.key === 'V')) return;
 
@@ -995,6 +1069,15 @@ document.addEventListener('keydown', (e) => {
       e.preventDefault();
     }
     return;
+  }
+
+  // "V" pastes the next sequence digit (comp/hardcore, before clock starts)
+  if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey) {
+    if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime === null) {
+      pasteNextDigit();
+      e.preventDefault();
+      return;
+    }
   }
 
   const k = e.key.toUpperCase();
@@ -1048,6 +1131,13 @@ resetBtns.forEach(btn => {
       applyKeypadFlip(DEFAULT_KEYPAD_FLIP);
       localStorage.setItem(STORAGE_KEYS.keypadFlip, DEFAULT_KEYPAD_FLIP ? 'numpad' : 'phone');
       updateResetVisibility();
+    } else if (target === 'practice-display') {
+      state.practiceDisplay = DEFAULT_PRACTICE_DISPLAY;
+      const radio = document.querySelector(`input[name="practice-display"][value="${DEFAULT_PRACTICE_DISPLAY}"]`);
+      if (radio) radio.checked = true;
+      localStorage.setItem(STORAGE_KEYS.practiceDisplay, DEFAULT_PRACTICE_DISPLAY);
+      updateResetVisibility();
+      render();
     }
   });
 });
@@ -1060,6 +1150,7 @@ function updateResetVisibility() {
     else if (target === 'auto-check') isDefault = state.practiceDelay === DEFAULT_PRACTICE_DELAY;
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
+    else if (target === 'practice-display') isDefault = state.practiceDisplay === DEFAULT_PRACTICE_DISPLAY;
     btn.hidden = isDefault;
   });
 }
@@ -1120,6 +1211,12 @@ function loadPersistedSettings() {
     applyKeypadFlip(savedFlip === 'numpad');
   } else {
     applyKeypadFlip(DEFAULT_KEYPAD_FLIP);
+  }
+  const savedPracticeDisplay = localStorage.getItem(STORAGE_KEYS.practiceDisplay);
+  if (savedPracticeDisplay === 'oneline' || savedPracticeDisplay === 'annotations') {
+    state.practiceDisplay = savedPracticeDisplay;
+    const radio = document.querySelector(`input[name="practice-display"][value="${savedPracticeDisplay}"]`);
+    if (radio) radio.checked = true;
   }
 }
 

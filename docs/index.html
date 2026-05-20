@@ -115,6 +115,14 @@
         </div>
 
         <div class="setting">
+          <div class="setting-label"><label for="skip-to">Skip to digit</label></div>
+          <div class="setting-inline">
+            <input type="number" id="skip-to" min="1" placeholder="n">
+            <button id="skip-to-go" type="button" class="setting-action">Go</button>
+          </div>
+        </div>
+
+        <div class="setting">
           <div class="setting-label">Mode</div>
           <div class="mode-selector" role="radiogroup" aria-label="Mode">
             <label class="mode-option">
@@ -153,6 +161,23 @@
             <label class="mode-option">
               <input type="radio" name="theme" value="dark">
               <span>Dark</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            Practice display
+            <button type="button" class="setting-reset" data-reset="practice-display" hidden aria-label="Reset practice display to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Practice display">
+            <label class="mode-option">
+              <input type="radio" name="practice-display" value="oneline" checked>
+              <span>One line</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="practice-display" value="annotations">
+              <span>Annotations</span>
             </label>
           </div>
         </div>
