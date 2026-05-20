@@ -192,11 +192,11 @@ main {
   margin: 1.4rem 0 0.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.1em;
+  color: var(--accent);
 }
 
 .mode-selector {
