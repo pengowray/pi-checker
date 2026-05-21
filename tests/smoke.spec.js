@@ -22,8 +22,8 @@ test('loads with pi by default', async ({ page }) => {
 test('sequence dropdown lists every supported sequence', async ({ page }) => {
   const values = await page.$$eval('#sequence option', els => els.map(e => e.value));
   expect(values).toEqual([
-    'pi', 'tau', 'phi', 'e', 'ln2', 'sqrt2', 'pi-binary', 'pi-hex',
-    'primes', 'primes-spaced', 'champernowne',
+    'pi', 'tau', 'phi', 'e', 'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
+    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
   ]);
 });
 
@@ -154,9 +154,10 @@ test('settings shows digit count under the sequence dropdown', async ({ page }) 
   await expect(page.locator('#sequence-digits-hint')).toHaveText(
     /^[0-9,]+ digits available$/
   );
-  // ln 2 is bundled with exactly 2200 digits.
+  // ln 2's long file ships 20,001 digits; wait for it to load before asserting.
   await page.locator('#sequence').selectOption('ln2');
-  await expect(page.locator('#sequence-digits-hint')).toHaveText('2,200 digits available');
+  await page.waitForFunction(() => window.LONG_DIGITS && window.LONG_DIGITS.ln2);
+  await expect(page.locator('#sequence-digits-hint')).toHaveText('20,001 digits available');
   // Switching back to pi should swap the count (pi has at least the short
   // fallback length of ~1000+).
   await page.locator('#sequence').selectOption('pi');
@@ -348,10 +349,12 @@ test('render: adding one digit at 10k entries stays cheap', async ({ page }) => 
   // Seed via paste so we don't pay 10k keystroke costs in the test itself.
   // Long pi loads async — wait for it before pasting.
   await page.waitForFunction(() => {
-    return typeof window.PI_LONG_DIGITS === 'string' && window.PI_LONG_DIGITS.length >= 10000;
+    return window.LONG_DIGITS &&
+      typeof window.LONG_DIGITS.pi === 'string' &&
+      window.LONG_DIGITS.pi.length >= 10000;
   });
   await page.evaluate(() => {
-    const text = window.PI_LONG_DIGITS.slice(0, 10000);
+    const text = window.LONG_DIGITS.pi.slice(0, 10000);
     const dt = new DataTransfer();
     dt.setData('text', text);
     const ev = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true });

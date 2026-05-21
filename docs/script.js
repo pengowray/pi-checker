@@ -1,7 +1,8 @@
 // ---- Sequences ----
 // Built-in fallback for pi (replaced asynchronously by the long version
-// from pi-long.js when it loads). The other sequences are bundled in
-// sequences.js (window.SEQUENCE_DATA).
+// from docs/long/pi.js when it loads). The other sequences are bundled in
+// sequences.js (window.SEQUENCE_DATA), with their full-length versions
+// loaded on demand from docs/long/<id>.js (see loadLong()).
 const SHORT_PI = (
   "1415926535897932384626433832795028841971693993751058209749" +
   "4459230781640628620899862803482534211706798214808651328230" +
@@ -64,6 +65,26 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '',
   },
+  sqrt3: {
+    label: '√3',
+    shortLabel: '√3',
+    hintLabel: 'the square root of 3',
+    titleHtml: '&radic;3 Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  sqrt5: {
+    label: '√5',
+    shortLabel: '√5',
+    hintLabel: 'the square root of 5',
+    titleHtml: '&radic;5 Checker',
+    integerPart: '2',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
   e: {
     label: 'e (Euler’s number)',
     shortLabel: 'e',
@@ -79,6 +100,16 @@ const SEQUENCES = {
     shortLabel: 'ln 2',
     hintLabel: 'the natural log of 2',
     titleHtml: 'ln 2 Checker',
+    integerPart: '0',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  log10_2: {
+    label: 'log₁₀ 2',
+    shortLabel: 'log₁₀ 2',
+    hintLabel: 'the base-10 log of 2',
+    titleHtml: 'log<sub>10</sub> 2 Checker',
     integerPart: '0',
     alphabet: '0123456789',
     keypadType: 'decimal',
@@ -145,9 +176,9 @@ const SEQUENCES = {
   },
 };
 
-// Pull in the bundled secondary sequences
+// Pull in the bundled secondary sequences (short fallbacks)
 if (window.SEQUENCE_DATA) {
-  for (const key of ['phi', 'sqrt2', 'e', 'ln2', 'pi-binary', 'pi-hex']) {
+  for (const key of ['phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2', 'pi-binary', 'pi-hex']) {
     if (window.SEQUENCE_DATA[key]) {
       SEQUENCES[key].digits = window.SEQUENCE_DATA[key].digits;
     }
@@ -443,6 +474,9 @@ function applySequence(id) {
   // sequence when the app actually re-initialised back to the default.
   if (sequenceSelect.value !== id) sequenceSelect.value = id;
   updateSequenceDigitsHint();
+  // Fire-and-forget: fetch the long version if we have a source for it.
+  // Already-loaded sequences are a no-op (loadLong dedupes).
+  loadLong(id);
 }
 
 sequenceSelect.addEventListener('change', () => {
@@ -1652,31 +1686,55 @@ skipModal.addEventListener('click', (e) => {
   if (e.target && e.target.hasAttribute('data-close')) closeSkipModal();
 });
 
-// ---- Async load of the long pi sequence ----
-function loadLongPi() {
-  const script = document.createElement('script');
-  script.src = 'pi-long.js';
-  script.async = true;
-  script.onload = () => {
-    if (typeof window.PI_LONG_DIGITS === 'string' && window.PI_LONG_DIGITS.length > SEQUENCES.pi.digits.length) {
-      SEQUENCES.pi.digits = window.PI_LONG_DIGITS;
-      // Tau is derived from pi, so its length grows in step.
-      deriveTau();
-      if (state.sequenceId === 'pi' || state.sequenceId === 'tau') {
-        state.digits = SEQUENCES[state.sequenceId].digits;
-        // Re-score entries that may have been beyond the short fallback
-        computeStatuses();
-        render();
-        // The hint reflects the active sequence's length, so refresh it.
-        updateSequenceDigitsHint();
+// ---- Async load of long sequence data ----
+// Each sequence with a reliable longer source has its own file in
+// docs/long/<id>.js. The files set window.LONG_DIGITS[id] (kept lazy so
+// only the picked sequence pays the bytes). Triggered eagerly for pi (so
+// the perf test and a typical first-load user both get the long version
+// quickly) and on demand whenever the user picks a different sequence.
+const LONG_AVAILABLE = new Set([
+  'pi', 'phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2',
+  'pi-binary', 'pi-hex',
+]);
+const longLoadPromises = new Map();
+
+function loadLong(id) {
+  // Tau is derived from pi; loading pi covers both.
+  if (id === 'tau') id = 'pi';
+  if (!LONG_AVAILABLE.has(id)) return Promise.resolve(false);
+  if (longLoadPromises.has(id)) return longLoadPromises.get(id);
+  const p = new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'long/' + id + '.js';
+    script.async = true;
+    script.onload = () => {
+      const longDigits = window.LONG_DIGITS && window.LONG_DIGITS[id];
+      if (typeof longDigits === 'string' && longDigits.length > SEQUENCES[id].digits.length) {
+        SEQUENCES[id].digits = longDigits;
+        // Tau is derived from pi, so its length grows in step.
+        if (id === 'pi') deriveTau();
+        // If the user is currently on this sequence (or tau when pi
+        // loaded), swap in the longer string and re-score any entries
+        // beyond the short fallback.
+        const active = state.sequenceId;
+        const isActive = active === id || (id === 'pi' && active === 'tau');
+        if (isActive) {
+          state.digits = SEQUENCES[active].digits;
+          computeStatuses();
+          render();
+          updateSequenceDigitsHint();
+        }
       }
-    }
-  };
-  script.onerror = () => {
-    // Long pi failed to load; the short bundled version still works
-    console.warn('Could not load pi-long.js; using short pi fallback');
-  };
-  document.head.appendChild(script);
+      resolve(true);
+    };
+    script.onerror = () => {
+      console.warn('Could not load long/' + id + '.js; using short fallback');
+      resolve(false);
+    };
+    document.head.appendChild(script);
+  });
+  longLoadPromises.set(id, p);
+  return p;
 }
 
 // ---- Load persisted settings ----
@@ -1714,9 +1772,8 @@ function loadPersistedSettings() {
 
 // ---- Init ----
 loadPersistedSettings();
-applySequence('pi');
+applySequence('pi'); // also triggers loadLong('pi') via applySequence
 applyModeDefaults();
 updateModeHint();
 updateResetVisibility();
 render();
-loadLongPi();
