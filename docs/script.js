@@ -1355,6 +1355,10 @@ function render() {
   statMissed.textContent = zeroDash(missed);
   statSkipped.textContent = zeroDash(skipped);
   statErased.textContent = zeroDash(state.erasedErrors);
+  // Act as a key for the dotted underline on corrected digits — only meaningful
+  // in practice mode (where corrected digits actually render).
+  statErased.classList.toggle('corrected',
+    state.mode === 'practice' && state.erasedErrors > 0);
 
   updateUI();
 }
