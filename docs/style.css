@@ -459,6 +459,12 @@ input[type="range"]:disabled {
 .digit { display: inline-block; }
 .digit.correct { color: var(--correct); }
 .digit.correct.skipped { color: var(--fg); opacity: 0.85; }
+/* Practice-mode cue: digit was typed wrong, erased, and re-typed correctly. */
+.digit.correct.corrected {
+  text-decoration: underline dotted var(--missed);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
 .digit.wrong {
   color: var(--wrong);
   text-decoration: underline;

@@ -286,6 +286,10 @@ const state = {
   practicePauseDisplayedAt: 0,
   erasedErrors: 0,
   erasedPreCheck: 0, // wrong digits erased before they were checked; not displayed yet
+  // Pi seqIdx positions where a wrong digit was erased. When a digit is later
+  // typed that lands at the same position with a positional (non-skip) correct
+  // match, we mark it as "corrected" in practice mode.
+  correctedPositions: new Set(),
   groupSize: 0,
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
@@ -625,6 +629,7 @@ function clearSession() {
   state.practicePauseDisplayedAt = 0;
   state.erasedErrors = 0;
   state.erasedPreCheck = 0;
+  state.correctedPositions.clear();
   state.integerCharsConsumed = 0;
   state.compTimerHidden = false;
 }
@@ -895,6 +900,16 @@ function backspace() {
     state.erasedPreCheck += 1;
   }
 
+  // Remember positions of erased positional wrongs so the eventually-correct
+  // re-type can be marked. We deliberately skip the .skipped / .skipConfirms
+  // cases: those increment erasedErrors too, but the user didn't make a
+  // positional mistake at that pi index — marking subsequent digits there
+  // would be misleading. (A wrong entry has seqIdxAfter = piPos + 1.)
+  if (last.status === 'wrong' && last.expected !== null) {
+    const piPos = last.seqIdxAfter - 1;
+    if (piPos >= 0) state.correctedPositions.add(piPos);
+  }
+
   const popped = state.entries.pop();
   if (popped && popped._timerId) {
     clearTimeout(popped._timerId);
@@ -1041,6 +1056,7 @@ function computeStatuses(fromIdx = 0) {
     const e = entries[i];
     e.missedBefore = [];
     e.skipConfirms = false;
+    e.corrected = false;
 
     if (seqIdx >= digits.length) {
       e.status = 'wrong';
@@ -1052,6 +1068,7 @@ function computeStatuses(fromIdx = 0) {
     if (e.char === digits[seqIdx]) {
       e.status = 'correct';
       e.expected = digits[seqIdx];
+      e.corrected = state.correctedPositions.has(seqIdx);
       seqIdx += 1;
       e.seqIdxAfter = seqIdx;
       continue;
@@ -1161,6 +1178,7 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
   if (e.checked) {
     let cls = 'digit ' + e.status;
     if (e.skipped) cls += ' skipped';
+    if (e.corrected && ctx.inPractice) cls += ' corrected';
     const showDiff = ((ctx.inComp && ctx.competitiveEnded) || ctx.inPracticeAnnot)
       && e.status === 'wrong' && e.expected;
     const showMask = ctx.inComp && !ctx.competitiveEnded && e.status === 'wrong';
@@ -1219,8 +1237,10 @@ function computeEntryFingerprint(e, ctx, hasPrimeAfter) {
       (ctx.isManual ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
   }
   return 'c|' + e.char + '|' + e.status + '|' + (e.expected || '') + '|' +
-    (e.skipped ? 1 : 0) + '|' + e.missedBefore.join(',') + '|' +
+    (e.skipped ? 1 : 0) + '|' + (e.corrected ? 1 : 0) + '|' +
+    e.missedBefore.join(',') + '|' +
     (ctx.inComp ? 1 : 0) + '|' + (ctx.competitiveEnded ? 1 : 0) + '|' +
+    (ctx.inPractice ? 1 : 0) + '|' +
     (ctx.inPracticeAnnot ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
 }
 
@@ -1234,6 +1254,7 @@ function render() {
   const ctx = {
     inComp: state.mode === 'competitive',
     competitiveEnded: state.competitiveEnded,
+    inPractice: state.mode === 'practice',
     inPracticeAnnot: state.mode === 'practice' && state.practiceDisplay === 'annotations',
     autoCheckSeconds: state.autoCheckSeconds,
     isManual: isManual(),
