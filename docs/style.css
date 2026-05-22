@@ -756,15 +756,16 @@ input[type="range"]:disabled {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  margin-bottom: 0.7rem;
 }
 
 .skip-inline-label {
-  font-size: 0.85rem;
-  color: var(--muted);
+  font-size: 0.9rem;
+  color: var(--fg);
 }
 
 .skip-inline input[type="number"] {
-  width: 5.5rem;
+  flex: 1;
   background: var(--key-bg);
   color: var(--fg);
   border: 1px solid var(--border);
@@ -773,10 +774,14 @@ input[type="range"]:disabled {
   font-size: 0.95rem;
   font-family: inherit;
   font-variant-numeric: tabular-nums;
+  max-width: 8rem;
 }
 
-.skip-inline .setting-action {
-  margin-left: auto;
+/* Standalone confirm button sits on its own row, full-width, with the
+   live "Skip N" label. */
+.skip-confirm-btn {
+  display: block;
+  width: 100%;
   font-variant-numeric: tabular-nums;
 }
 
