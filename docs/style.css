@@ -429,6 +429,7 @@ input[type="range"]:disabled {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 /* Bottom-anchored content via margin-top: auto. When the row is shorter
@@ -969,11 +970,14 @@ input[type="range"]:disabled {
 /* Off-screen mobile-input. Visible to assistive tech / JS focus but not
    to the user — opacity 0 + 1×1px so it doesn't take layout space. Kept
    visible (not display:none) so .focus() actually surfaces the keyboard
-   on iOS / Android. */
+   on iOS / Android. Positioned at the bottom of .pi-display (which is
+   position:relative for this) so the browser's keep-caret-in-view scroll
+   lands on the typing area rather than yanking the page to top:0 of the
+   document on every keystroke. */
 #mobile-input {
   position: absolute;
   left: 0;
-  top: 0;
+  bottom: 0;
   width: 1px;
   height: 1px;
   opacity: 0;
