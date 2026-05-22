@@ -1813,17 +1813,12 @@ function formatTime(seconds) {
   return Math.floor(total / 60) + ':' + pad(s);
 }
 
-// Where to display the active countdown.
-//   - Bullet: ALWAYS in the bottom-right stat-time slot — the bullet
-//     countdown is the only timer the player needs, and folding it into
-//     stat-time means it can't drift out of sync with a separate big-top
-//     reading and never duplicates the same value in two places.
-//   - Competitive: stat-time in medium/low motion (matching the comp
-//     pattern), big top in high motion.
+// Where to display the active countdown. Competitive and bullet share
+// the same per-motion-mode layout: big top in high motion, folded into
+// the bottom-right stat-time slot in medium/low/zen.
 function showCompTimerInline() {
-  if (state.mode === 'bullet') return true;
   if (state.motionMode === 'high') return false;
-  return state.mode === 'competitive';
+  return state.mode === 'competitive' || state.mode === 'bullet';
 }
 
 // Returns the countdown remaining in seconds for competitive / bullet,
@@ -1893,6 +1888,10 @@ function tickTime() {
       statTime.textContent = formatTime(capped) + ' elapsed';
       statTime.classList.remove('countdown');
       statTime.classList.toggle('frozen', state.competitiveEnded);
+    } else if (state.mode === 'bullet') {
+      statTime.textContent = formatTime(elapsed) + ' elapsed';
+      statTime.classList.remove('countdown');
+      statTime.classList.toggle('frozen', state.bulletGameOver);
     } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
       statTime.textContent = formatTime(elapsed) + ' elapsed';
       statTime.classList.remove('countdown');
@@ -1904,16 +1903,27 @@ function tickTime() {
     }
   }
 
-  // Big top countdown — competitive in high motion only. Bullet always
-  // uses the inline stat-time slot, so it never reaches this branch.
-  if (state.mode === 'competitive' && !showCompTimerInline()) {
-    const elapsed = state.startTime === null ? 0
-      : (state.competitiveEnded ? state.competitiveFrozenAt : (performance.now() - state.startTime) / 1000);
-    const remaining = getModeRemaining(elapsed);
+  // Big top countdown — competitive and bullet in high motion only.
+  // Medium/low/zen fold the countdown into the inline stat-time slot.
+  if ((state.mode === 'competitive' || state.mode === 'bullet') && !showCompTimerInline()) {
+    let bigElapsed;
+    if (state.startTime === null) {
+      bigElapsed = 0;
+    } else if (state.competitiveEnded && state.mode === 'competitive') {
+      bigElapsed = state.competitiveFrozenAt;
+    } else if (state.bulletGameOver && state.mode === 'bullet') {
+      bigElapsed = state.bulletFrozenAt;
+    } else {
+      bigElapsed = (performance.now() - state.startTime) / 1000;
+    }
+    const remaining = getModeRemaining(bigElapsed);
+    const ended = state.competitiveEnded || state.bulletGameOver;
+    const active = (state.mode === 'competitive' && state.gameLocked) ||
+                   (state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver);
     compTimerEl.textContent = formatTime(remaining);
-    compTimerEl.classList.toggle('ended', state.competitiveEnded);
-    compTimerEl.classList.toggle('danger', !state.competitiveEnded && remaining <= 10 && state.gameLocked);
-    compTimerEl.classList.toggle('warning', !state.competitiveEnded && remaining > 10 && remaining <= 60 && state.gameLocked);
+    compTimerEl.classList.toggle('ended', ended);
+    compTimerEl.classList.toggle('danger', !ended && remaining <= 10 && active);
+    compTimerEl.classList.toggle('warning', !ended && remaining > 10 && remaining <= 60 && active);
   }
 }
 setInterval(tickTime, 250);
@@ -1981,6 +1991,8 @@ function updateUI() {
   compTimerEl.hidden = !showCompTimer;
   compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded && !state.bulletGameOver);
   compTimerEl.classList.toggle('bullet', state.mode === 'bullet');
+  compTimerEl.setAttribute('aria-label',
+    (state.mode === 'bullet' ? 'Bullet' : 'Competitive') + ' countdown, click to hide');
 
   // Click-to-dim elapsed/countdown clock. Also force-dimmed by default in
   // low-motion practice (the user can click to reveal).
