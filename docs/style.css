@@ -660,6 +660,10 @@ input[type="range"]:disabled {
 :root[data-motion="zen"] .stats { display: none; }
 :root[data-motion="zen"].zen-reveal .stats { display: grid; }
 
+/* Actions row (Reset / Continue / stat-time) also revealed on pause or
+   game-over, so the player can restart without leaving zen. */
+:root[data-motion="zen"].zen-reveal .actions { display: grid; }
+
 /* Corner ×, only shown in zen so the user can always escape without
    reaching for the keyboard. */
 #zen-exit {
