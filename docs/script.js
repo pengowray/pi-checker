@@ -344,6 +344,11 @@ const state = {
   bulletBudget: DEFAULT_BULLET_START, // current time bank
   bulletGameOver: false,
   bulletFrozenAt: 0, // elapsed seconds at game over
+  // Pi positions that have ever received a penalty in this run. Persists
+  // across backspace+retype so the same position can't be penalised more
+  // than once, even if the user erases the wrong digit and types another
+  // wrong one there.
+  bulletPenalizedPositions: new Set(),
 };
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
@@ -817,6 +822,7 @@ function clearSession() {
   state.bulletBudget = state.bulletStartSeconds;
   state.bulletGameOver = false;
   state.bulletFrozenAt = 0;
+  state.bulletPenalizedPositions.clear();
 }
 
 function applyModeDefaults() {
@@ -931,25 +937,41 @@ function endHardcore() {
 }
 
 // ---- Bullet mode lifecycle ----
-// Per-entry scoring flags: bulletPenalized / bulletBonused / bulletRefunded.
-// Each entry can be penalized at most once for being wrong, and bonused at
-// most once for being correct. If a previously-penalized entry transitions
-// to correct (missed-detection re-scores it), the penalty is refunded once
-// AND a bonus is applied — net +penalty+bonus, matching the spec's "+35s".
+// Scoring rules:
+//   1. Penalty is per pi POSITION, not per entry. Once a position has paid
+//      a penalty, no further penalty for that position — even if the wrong
+//      entry is erased and another wrong digit is typed there.
+//      (state.bulletPenalizedPositions tracks ever-penalized positions.)
+//   2. Bonus is per entry, applied at most once.
+//   3. Refund is per entry: the specific entry that paid the penalty
+//      gets its penalty refunded if/when it later resolves to correct
+//      (typically via missed-detection re-scoring). A new entry at the
+//      same position that didn't actually pay a penalty can NOT trigger
+//      a refund.
+//   4. Skipped and "fixed" (corrected) entries are inert — no time change.
 function applyBulletScoring() {
   if (state.mode !== 'bullet') return;
   if (state.bulletGameOver) return;
   for (const e of state.entries) {
     if (!e.checked) continue;
-    // Fixed (retyped after backspace) and skipped entries don't change time.
     if (e.skipped || e.corrected) continue;
+    const piPos = e.seqIdxAfter > 0 ? e.seqIdxAfter - 1 : -1;
+    if (piPos < 0) continue;
     if (e.status === 'wrong') {
-      if (!e.bulletPenalized) {
+      // Only deduct (and only mark this entry as having paid the penalty)
+      // if the position hasn't already been penalised. Otherwise the
+      // entry is silently wrong: no time deducted, and no refund possible
+      // later because e.bulletPenalized stays false.
+      if (!e.bulletPenalized && !state.bulletPenalizedPositions.has(piPos)) {
         state.bulletBudget -= state.bulletPenaltySeconds;
+        state.bulletPenalizedPositions.add(piPos);
         e.bulletPenalized = true;
       }
     } else if (e.status === 'correct') {
       if (e.bulletPenalized && !e.bulletRefunded) {
+        // Only the entry that actually paid the penalty can get it back.
+        // The position stays in bulletPenalizedPositions so re-typing
+        // wrong here still can't be re-penalised.
         state.bulletBudget += state.bulletPenaltySeconds;
         e.bulletRefunded = true;
       }
