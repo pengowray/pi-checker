@@ -1084,6 +1084,9 @@ function backspace() {
 
 function forceCheck() {
   if (isInputLocked()) return;
+  // Competitive disallows manual force-checks — only the per-digit and
+  // lookahead auto-checks should reveal results.
+  if (state.mode === 'competitive') return;
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
@@ -1762,7 +1765,9 @@ function updateUI() {
   }
   allBackBtns.forEach(btn => { btn.disabled = backDisabled; });
 
-  const checkDisabled = inputLocked || !hasPending();
+  // Competitive: no manual force-check — only the per-digit / lookahead
+  // auto-checks reveal results. Disable the check button outright.
+  const checkDisabled = inputLocked || !hasPending() || state.mode === 'competitive';
   allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
   // Stop button: ends in comp/hardcore, pseudo-pauses in practice

@@ -593,8 +593,12 @@ input[type="range"]:disabled {
    Greyscale colour tokens override the accent / status colours so every
    button, digit, and chrome element collapses to fg / muted shades.
    Wrong vs correct is still distinguishable via the wrong-underline.
+
+   Scoped to <main> only — modals (settings / skip / missed) are body-
+   level siblings, so they keep the original tokens and stay readable
+   when the user opens settings from zen to switch out.
 */
-:root[data-motion="zen"] {
+:root[data-motion="zen"] main {
   --accent: var(--fg);
   --correct: var(--fg);
   --wrong: var(--fg);
@@ -994,21 +998,24 @@ input[type="range"]:disabled {
   to { width: 100%; }
 }
 
-/* Low motion: no animated fill on the check button. */
-:root[data-motion="low"] .key-check.filling::after {
+/* Low / zen motion: no animated fill on the check button either. */
+:root[data-motion="low"] .key-check.filling::after,
+:root[data-motion="zen"] .key-check.filling::after {
   animation: none;
 }
 
-/* Medium and low motion: the per-digit underline strip is distracting.
-   Disable both the strip and the digit colour fade — pending digits stay
-   in --pending until they're checked. */
+/* Medium / low / zen motion: the per-digit underline strip is
+   distracting. Disable both the strip and the digit colour fade —
+   pending digits stay in --pending until they're checked. */
 :root[data-motion="medium"] .digit.auto-filling,
-:root[data-motion="low"] .digit.auto-filling {
+:root[data-motion="low"] .digit.auto-filling,
+:root[data-motion="zen"] .digit.auto-filling {
   animation: none;
   color: var(--pending);
 }
 :root[data-motion="medium"] .digit.auto-filling::after,
-:root[data-motion="low"] .digit.auto-filling::after {
+:root[data-motion="low"] .digit.auto-filling::after,
+:root[data-motion="zen"] .digit.auto-filling::after {
   display: none;
 }
 
