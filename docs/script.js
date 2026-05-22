@@ -343,6 +343,7 @@ const state = {
   bulletPenaltySeconds: DEFAULT_BULLET_PENALTY,
   bulletBudget: DEFAULT_BULLET_START, // current time bank
   bulletGameOver: false,
+  bulletEndReason: null, // 'timeout' (budget hit 0) or 'stopped' (user-pressed Stop)
   bulletFrozenAt: 0, // elapsed seconds at game over
   // Pi positions that have ever received a penalty in this run. Persists
   // across backspace+retype so the same position can't be penalised more
@@ -791,6 +792,7 @@ function attemptModeChange(newMode) {
       state.startTime = performance.now() - state.bulletFrozenAt * 1000;
     }
     state.bulletGameOver = false;
+    state.bulletEndReason = null;
   }
 
   state.mode = newMode;
@@ -821,6 +823,7 @@ function clearSession() {
   state.compTimerHidden = false;
   state.bulletBudget = state.bulletStartSeconds;
   state.bulletGameOver = false;
+  state.bulletEndReason = null;
   state.bulletFrozenAt = 0;
   state.bulletPenalizedPositions.clear();
 }
@@ -846,7 +849,9 @@ function updateModeBadge() {
   let delayText;
   if (state.mode === 'competitive' && state.competitiveEnded) delayText = 'ended';
   else if (state.mode === 'hardcore' && state.hardcoreFailed) delayText = 'failed';
-  else if (state.mode === 'bullet' && state.bulletGameOver) delayText = 'time out';
+  else if (state.mode === 'bullet' && state.bulletGameOver) {
+    delayText = state.bulletEndReason === 'stopped' ? 'stopped' : 'time out';
+  }
   else if (state.mode === 'competitive') {
     delayText = COMPETITIVE_PER_DIGIT_SECONDS + 's/digit, +' + COMPETITIVE_LOOKAHEAD;
   }
@@ -1017,9 +1022,10 @@ function floatBulletDelta(seconds) {
   setTimeout(() => float.remove(), 1200);
 }
 
-function endBullet() {
+function endBullet(reason = 'timeout') {
   if (state.mode !== 'bullet' || state.bulletGameOver) return;
   state.bulletGameOver = true;
+  state.bulletEndReason = reason;
   state.bulletFrozenAt = state.startTime === null ? 0
     : (performance.now() - state.startTime) / 1000;
   if (state.autoCheckTimer) {
@@ -1059,6 +1065,7 @@ function continueInPractice() {
       state.startTime = performance.now() - state.bulletFrozenAt * 1000;
     }
     state.bulletGameOver = false;
+    state.bulletEndReason = null;
   } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
     if (state.startTime !== null) {
       state.startTime = performance.now() - state.hardcoreFrozenAt * 1000;
@@ -2094,7 +2101,7 @@ resetBtn.addEventListener('click', reset);
 stopBtn.addEventListener('click', () => {
   if (state.mode === 'competitive') endCompetitive();
   else if (state.mode === 'hardcore') endHardcore();
-  else if (state.mode === 'bullet') endBullet();
+  else if (state.mode === 'bullet') endBullet('stopped');
   else if (state.mode === 'practice') practicePause();
 });
 continueBtn.addEventListener('click', () => continueInPractice());
@@ -2477,10 +2484,19 @@ function openBulletScoreModal() {
   }
   const pos = state.nextSeqIdx || 0;
   const seqLabel = (SEQUENCES[state.sequenceId] && SEQUENCES[state.sequenceId].shortLabel) || state.sequenceId;
-  document.getElementById('bullet-score-headline').textContent =
-    state.bulletGameOver
-      ? 'Time out at digit ' + pos + ' of ' + seqLabel + '.'
-      : 'Run so far — digit ' + pos + ' of ' + seqLabel + '.';
+  let headline;
+  if (state.bulletGameOver) {
+    if (state.bulletEndReason === 'stopped') {
+      const remaining = Math.max(0, state.bulletBudget - state.bulletFrozenAt);
+      headline = 'Stopped with ' + formatTime(remaining) + ' remaining at digit ' +
+        pos + ' of ' + seqLabel + '.';
+    } else {
+      headline = 'Time out at digit ' + pos + ' of ' + seqLabel + '.';
+    }
+  } else {
+    headline = 'Run so far — digit ' + pos + ' of ' + seqLabel + '.';
+  }
+  document.getElementById('bullet-score-headline').textContent = headline;
   document.getElementById('bullet-score-correct').textContent = correct;
   document.getElementById('bullet-score-wrong').textContent = wrong;
   document.getElementById('bullet-score-fixed').textContent = fixed;
