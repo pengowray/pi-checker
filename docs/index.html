@@ -304,13 +304,11 @@
     <div class="modal-backdrop" data-close></div>
     <div class="modal-card">
       <div class="modal-head">
-        <h2>About &ldquo;Missed&rdquo;</h2>
+        <h2>What are &ldquo;Missed&rdquo; digits?</h2>
         <button id="missed-close" aria-label="Close" data-close>&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p>Counts digits the checker thinks you typed past. Each detection marks up to 2 missed digits.</p>
-        <p>How it works: if a typed digit matches 1 or 2 positions ahead, and your next 2 digits also match, the skipped positions are recorded as missed.</p>
-        <p>Missed digits appear as small ghosted markers before the typed digit. They count toward the Missed stat, not Wrong.</p>
+        <p>If you leave out 1 or 2 numbers but enter the next 3 correctly, those <i>missed</i> digits are automatically inserted in yellow and count as missed.</p>
       </div>
     </div>
   </div>
@@ -323,13 +321,14 @@
         <button id="skip-close" aria-label="Close" data-close>&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="skip-hint">Marks the next digits as already known. They show the correct value and count toward Skipped, not Correct.</p>
+        <p class="skip-hint">Marks the next digits as already known.</p>
         <div class="skip-presets" role="group" aria-label="Skip preset amounts">
           <button type="button" class="skip-preset" data-skip="1">1</button>
           <button type="button" class="skip-preset" data-skip="10">10</button>
           <button type="button" class="skip-preset" data-skip="100">100</button>
           <button type="button" class="skip-preset" data-skip="1000">1000</button>
         </div>
+        <br>
         <div class="skip-inline">
           <label for="skip-count" class="skip-inline-label">Custom:</label>
           <input type="number" id="skip-count" min="1" value="100">
