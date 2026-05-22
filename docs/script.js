@@ -986,21 +986,33 @@ function applyBulletScoring() {
   }
 }
 
-// Float a "+5" / "−30" indicator above the big-top timer for ~1s.
-// High-motion bullet only — the inline stat-time slot used in lower
-// motion modes already reflects the budget change directly.
+// Float a "+5" / "−30" indicator near the active bullet timer for ~1s.
+//   - High motion: large, below the big-top timer.
+//   - Medium motion: small, above the inline stat-time slot.
+// Low / zen are silent — the inline countdown already reflects the
+// change and a float would clash with the motion-mode intent.
 function floatBulletDelta(seconds) {
   if (seconds === 0) return;
   if (state.mode !== 'bullet') return;
-  if (state.motionMode !== 'high') return;
-  if (compTimerEl.hidden) return;
-  const rect = compTimerEl.getBoundingClientRect();
+  let anchor, size;
+  if (state.motionMode === 'high' && !compTimerEl.hidden) {
+    anchor = compTimerEl;
+    size = 'large';
+  } else if (state.motionMode === 'medium' && !statTime.hidden) {
+    anchor = statTime;
+    size = 'small';
+  } else {
+    return;
+  }
+  const rect = anchor.getBoundingClientRect();
   if (rect.width === 0) return;
   const float = document.createElement('div');
-  float.className = 'bullet-float ' + (seconds > 0 ? 'positive' : 'negative');
+  float.className = 'bullet-float ' + size + ' ' + (seconds > 0 ? 'positive' : 'negative');
   float.textContent = (seconds > 0 ? '+' : '−') + Math.abs(seconds);
   float.style.left = (rect.left + rect.width / 2) + 'px';
-  float.style.top = (rect.bottom + 2) + 'px';
+  // Large: drift down from below the big-top. Small: drift up from above
+  // the stat-time slot so it doesn't overlap the countdown text.
+  float.style.top = (size === 'large' ? rect.bottom + 2 : rect.top - 2) + 'px';
   document.body.appendChild(float);
   setTimeout(() => float.remove(), 1200);
 }
