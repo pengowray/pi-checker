@@ -647,19 +647,27 @@ input[type="range"]:disabled {
   color: var(--muted);
 }
 
-.skip-quick {
-  width: 100%;
+.skip-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.skip-preset {
   background: var(--key-bg);
   border: 1px solid var(--border);
   color: var(--fg);
   border-radius: 8px;
-  padding: 0.55rem 1rem;
-  font-size: 0.95rem;
+  padding: 0.55rem 0.4rem;
+  font-size: 1rem;
   font-family: inherit;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
-  margin-bottom: 0.9rem;
+  transition: background 0.08s;
 }
-.skip-quick:hover { background: var(--key-hover); }
+.skip-preset:hover { background: var(--key-hover); border-color: var(--muted); }
+.skip-preset:active { background: var(--key-active); }
 
 .skip-inline {
   display: flex;
@@ -667,8 +675,13 @@ input[type="range"]:disabled {
   align-items: center;
 }
 
+.skip-inline-label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .skip-inline input[type="number"] {
-  flex: 1;
+  width: 5.5rem;
   background: var(--key-bg);
   color: var(--fg);
   border: 1px solid var(--border);
@@ -676,7 +689,12 @@ input[type="range"]:disabled {
   padding: 0.45rem 0.7rem;
   font-size: 0.95rem;
   font-family: inherit;
-  max-width: 140px;
+  font-variant-numeric: tabular-nums;
+}
+
+.skip-inline .setting-action {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .keypad-hint {

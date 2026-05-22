@@ -302,9 +302,9 @@
         <button id="missed-close" aria-label="Close" data-close>&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p>If you skip a digit while typing &mdash; say you type the 7th digit but it actually matches the 8th &mdash; the checker treats the 7th as missed, and the digit you typed is scored against the 8th instead.</p>
-        <p>The skipped digit appears as a small inline &ldquo;ghost&rdquo; before the digit you actually typed. Missed digits count toward the <strong>Missed</strong> stat and do not count as wrong.</p>
-        <p>To trigger missed-detection the checker needs two more matching digits after the skip, so it only kicks in once you have typed enough context.</p>
+        <p>Counts digits the checker thinks you typed past. Each detection marks up to 2 missed digits.</p>
+        <p>How it works: if a typed digit matches 1 or 2 positions ahead, and your next 2 digits also match, the skipped positions are recorded as missed.</p>
+        <p>Missed digits appear as small ghosted markers before the typed digit. They count toward the Missed stat, not Wrong.</p>
       </div>
     </div>
   </div>
@@ -317,11 +317,17 @@
         <button id="skip-close" aria-label="Close" data-close>&#x2715;</button>
       </div>
       <div class="modal-body">
-        <p class="skip-hint">Mark the next digits as already known. They count as skipped.</p>
-        <button id="skip-one" type="button" class="skip-quick">Skip 1 digit</button>
+        <p class="skip-hint">Marks the next digits as already known. They show the correct value and count toward Skipped, not Correct.</p>
+        <div class="skip-presets" role="group" aria-label="Skip preset amounts">
+          <button type="button" class="skip-preset" data-skip="1">1</button>
+          <button type="button" class="skip-preset" data-skip="10">10</button>
+          <button type="button" class="skip-preset" data-skip="100">100</button>
+          <button type="button" class="skip-preset" data-skip="1000">1000</button>
+        </div>
         <div class="skip-inline">
+          <label for="skip-count" class="skip-inline-label">Custom:</label>
           <input type="number" id="skip-count" min="1" value="100">
-          <button id="skip-confirm" type="button" class="setting-action">Skip</button>
+          <button id="skip-confirm" type="button" class="setting-action">Skip <span id="skip-confirm-count">100</span></button>
         </div>
       </div>
     </div>

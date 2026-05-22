@@ -330,7 +330,7 @@ const state = {
 };
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
-let lastSkipAmount = 10;
+let lastSkipAmount = 100;
 
 // ---- DOM refs ----
 const userDigitsEl = document.getElementById('user-digits');
@@ -366,9 +366,10 @@ const autoCheckStyleSetting = document.getElementById('autocheck-style-setting')
 const resetBtns = document.querySelectorAll('.setting-reset');
 const skippedTile = document.getElementById('stat-skipped-tile');
 const skipModal = document.getElementById('skip-modal');
-const skipOneBtn = document.getElementById('skip-one');
 const skipConfirmBtn = document.getElementById('skip-confirm');
+const skipConfirmCountEl = document.getElementById('skip-confirm-count');
 const skipCountInput = document.getElementById('skip-count');
+const skipPresetBtns = document.querySelectorAll('.skip-preset');
 const missedTile = document.getElementById('stat-missed-tile');
 const missedModal = document.getElementById('missed-modal');
 const motionModeInputs = document.querySelectorAll('input[name="motion-mode"]');
@@ -1993,6 +1994,7 @@ settingsModal.addEventListener('click', (e) => {
 function openSkipModal() {
   if (!canSkip()) return;
   skipCountInput.value = lastSkipAmount;
+  syncSkipConfirmLabel();
   skipModal.hidden = false;
   skipModal.setAttribute('aria-hidden', 'false');
   setTimeout(() => { skipCountInput.focus(); skipCountInput.select(); }, 0);
@@ -2001,6 +2003,12 @@ function openSkipModal() {
 function closeSkipModal() {
   skipModal.hidden = true;
   skipModal.setAttribute('aria-hidden', 'true');
+}
+
+// Keeps the confirm button's "Skip N" label in sync with the number input.
+function syncSkipConfirmLabel() {
+  const v = parseInt(skipCountInput.value, 10);
+  if (skipConfirmCountEl) skipConfirmCountEl.textContent = (!isNaN(v) && v > 0) ? String(v) : '';
 }
 
 function confirmSkipN() {
@@ -2019,13 +2027,20 @@ skippedTile.addEventListener('keydown', (e) => {
   }
 });
 
-skipOneBtn.addEventListener('click', () => {
-  skipDigits(1);
-  closeSkipModal();
+// Preset chips: 1 / 10 / 100 / 1000 skip immediately on click.
+skipPresetBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    const n = parseInt(btn.dataset.skip, 10);
+    if (isNaN(n) || n < 1) return;
+    lastSkipAmount = n;
+    skipDigits(n);
+    closeSkipModal();
+  });
 });
 
 skipConfirmBtn.addEventListener('click', confirmSkipN);
 
+skipCountInput.addEventListener('input', syncSkipConfirmLabel);
 skipCountInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
