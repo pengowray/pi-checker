@@ -342,7 +342,7 @@ const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
 const statMissed = document.getElementById('stat-missed');
 const statSkipped = document.getElementById('stat-skipped');
-const statErased = document.getElementById('stat-erased');
+const statFixed = document.getElementById('stat-fixed');
 const statTime = document.getElementById('stat-time');
 
 // ---- Theme ----
@@ -414,29 +414,36 @@ autoCheckStyleInputs.forEach(input => {
 
 // ---- Skip next digit(s) ----
 // Practice: works any time. Competitive/Hardcore: only before the clock starts.
+function nextPiIdx() {
+  return state.entries.length > 0
+    ? state.entries[state.entries.length - 1].seqIdxAfter
+    : 0;
+}
+
 function canSkip() {
   if (isInputLocked()) return false;
-  if (state.entries.length >= state.digits.length) return false;
+  if (nextPiIdx() >= state.digits.length) return false;
   if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime !== null) return false;
   return true;
 }
 
 function skipDigits(n) {
   if (!canSkip()) return 0;
-  const remaining = state.digits.length - state.entries.length;
+  const remaining = state.digits.length - nextPiIdx();
   const count = Math.min(Math.max(0, n | 0), remaining);
   if (count === 0) return 0;
   const firstNewIdx = state.entries.length;
   for (let i = 0; i < count; i++) {
     const t = state.startTime === null ? null : (performance.now() - state.startTime);
     state.entries.push({
-      char: state.digits[state.entries.length],
+      char: state.digits[nextPiIdx()],
       t: t,
       skipped: true,
       checked: true,
       status: 'pending',
       expected: null,
       missedBefore: [],
+      seqIdxAfter: nextPiIdx() + 1,
     });
   }
   computeStatuses(firstNewIdx);
@@ -888,8 +895,7 @@ function backspace() {
     if (last.skipped) return; // skipped digits in competitive can't be erased
   }
 
-  // Displayed "Erased" counter: only the errors the user actually saw,
-  // plus skipped digits (any erase undoes that skip).
+  // Internal tracking (not displayed; reserved for future stats dialog).
   if (last.checked) {
     if (last.status === 'wrong' ||
         last.skipped ||
@@ -900,14 +906,29 @@ function backspace() {
     state.erasedPreCheck += 1;
   }
 
-  // Remember positions of erased positional wrongs so the eventually-correct
-  // re-type can be marked. We deliberately skip the .skipped / .skipConfirms
-  // cases: those increment erasedErrors too, but the user didn't make a
-  // positional mistake at that pi index — marking subsequent digits there
-  // would be misleading. (A wrong entry has seqIdxAfter = piPos + 1.)
-  if (last.status === 'wrong' && last.expected !== null) {
-    const piPos = last.seqIdxAfter - 1;
-    if (piPos >= 0) state.correctedPositions.add(piPos);
+  // Remember pi positions where the user has been *shown* the correct digit
+  // (via a wrong-and-checked entry, an explicit skip, or a missed marker).
+  // A subsequent correct re-type at one of these positions is marked as
+  // "fixed" (counted, dotted underline). Only checked entries qualify —
+  // pre-check erasures don't yet expose the correct value to the user.
+  if (last.checked) {
+    const piPosMain = last.seqIdxAfter > 0 ? last.seqIdxAfter - 1 : -1;
+    if (last.status === 'wrong' && last.expected !== null && piPosMain >= 0) {
+      // User saw the underline (and the correct digit in annotations mode).
+      state.correctedPositions.add(piPosMain);
+    } else if (last.skipped && piPosMain >= 0) {
+      // User explicitly skipped and saw the correct digit fill in.
+      state.correctedPositions.add(piPosMain);
+    }
+    // Missed markers attached to this entry: the user saw those correct
+    // digits rendered as small inline markers.
+    if (last.missedBefore && last.missedBefore.length > 0 && piPosMain >= 0) {
+      const missedStart = piPosMain - last.missedBefore.length;
+      for (let m = 0; m < last.missedBefore.length; m++) {
+        const p = missedStart + m;
+        if (p >= 0) state.correctedPositions.add(p);
+      }
+    }
   }
 
   const popped = state.entries.pop();
@@ -1092,6 +1113,7 @@ function computeStatuses(fromIdx = 0) {
       for (let j = 0; j < missed; j++) e.missedBefore.push(digits[seqIdx + j]);
       e.status = 'correct';
       e.expected = digits[seqIdx + missed];
+      e.corrected = state.correctedPositions.has(seqIdx + missed);
       seqIdx += missed + 1;
     } else {
       e.status = 'wrong';
@@ -1178,7 +1200,7 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
   if (e.checked) {
     let cls = 'digit ' + e.status;
     if (e.skipped) cls += ' skipped';
-    if (e.corrected && ctx.inPractice) cls += ' corrected';
+    else if (e.corrected && ctx.inPractice && e.status === 'correct') cls += ' corrected';
     const showDiff = ((ctx.inComp && ctx.competitiveEnded) || ctx.inPracticeAnnot)
       && e.status === 'wrong' && e.expected;
     const showMask = ctx.inComp && !ctx.competitiveEnded && e.status === 'wrong';
@@ -1271,56 +1293,117 @@ function render() {
   }
 
   const entries = state.entries;
-  let correct = 0, wrong = 0, missed = 0, skipped = 0;
+  let correct = 0, wrong = 0, missed = 0, skipped = 0, fixed = 0;
   let seqPos = 0;
+  // Cumulative pi positions consumed by entries' visible parts. Missed
+  // markers count as 1 pi position each; the main digit is 1. We track
+  // visible (not logical) so that pending entries — which don't show
+  // their inferred missed markers — only contribute 1 here.
+  let displayedPi = 0;
 
-  // Returns the parent node to which entry i's DOM should be appended /
-  // inserted into. Creates the per-group wrapper on first reference.
-  function parentForEntry(i) {
-    if (gs <= 0) return userDigitsEl;
-    const gIdx = Math.floor(i / gs);
+  // Track the last DOM node placed in each group, for in-order insertion.
+  // Key -1 (ALL_GROUP) is used when gs <= 0 (single flat container).
+  const lastNodeInGroup = new Map();
+  const ALL_GROUP = -1;
+
+  function groupIdxFor(piPos) {
+    if (gs <= 0) return ALL_GROUP;
+    return Math.floor(piPos / gs);
+  }
+
+  function groupParent(gIdx) {
+    if (gIdx === ALL_GROUP) return userDigitsEl;
     let wrap = groupElements[gIdx];
     if (!wrap) {
       wrap = document.createElement('span');
       wrap.className = 'group';
-      userDigitsEl.appendChild(wrap);
+      // Find the next existing higher-index group so we insert the wrap
+      // in the correct DOM order (groups may be created out of order
+      // when missed markers push their pi positions into earlier groups).
+      let nextSibling = null;
+      for (let k = gIdx + 1; k < groupElements.length; k++) {
+        if (groupElements[k]) { nextSibling = groupElements[k]; break; }
+      }
+      userDigitsEl.insertBefore(wrap, nextSibling);
       groupElements[gIdx] = wrap;
     }
     return wrap;
+  }
+
+  function insertNode(node, gIdx) {
+    const parent = groupParent(gIdx);
+    const after = lastNodeInGroup.get(gIdx);
+    if (after && after.parentNode === parent) {
+      parent.insertBefore(node, after.nextSibling);
+    } else {
+      parent.insertBefore(node, parent.firstChild);
+    }
+    lastNodeInGroup.set(gIdx, node);
+  }
+
+  function placeEntryNodes(nodes, e, visibleMissed, entryStartPi, mainPi, hasPrimeAfter) {
+    let nodeIdx = 0;
+    for (let m = 0; m < visibleMissed; m++) {
+      insertNode(nodes[nodeIdx], groupIdxFor(entryStartPi + m));
+      nodeIdx++;
+    }
+    insertNode(nodes[nodeIdx], groupIdxFor(mainPi));
+    nodeIdx++;
+    if (hasPrimeAfter && nodeIdx < nodes.length) {
+      insertNode(nodes[nodeIdx], groupIdxFor(mainPi));
+      nodeIdx++;
+    }
+  }
+
+  function markPlacedNodes(nodes, visibleMissed, entryStartPi, mainPi, hasPrimeAfter) {
+    let nodeIdx = 0;
+    for (let m = 0; m < visibleMissed; m++) {
+      lastNodeInGroup.set(groupIdxFor(entryStartPi + m), nodes[nodeIdx]);
+      nodeIdx++;
+    }
+    lastNodeInGroup.set(groupIdxFor(mainPi), nodes[nodeIdx]);
+    nodeIdx++;
+    if (hasPrimeAfter && nodeIdx < nodes.length) {
+      lastNodeInGroup.set(groupIdxFor(mainPi), nodes[nodeIdx]);
+      nodeIdx++;
+    }
   }
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const seqAfter = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
     const hasPrimeAfter = !!(primeBoundaries && primeBoundaries.has(seqAfter));
-    const fp = computeEntryFingerprint(e, ctx, hasPrimeAfter);
+    const visibleMissed = e.checked ? e.missedBefore.length : 0;
+    const entryStartPi = displayedPi;
+    const mainPi = entryStartPi + visibleMissed;
+    // Include entryStartPi in the fingerprint: if missed-marker counts
+    // shift earlier entries' contribution to displayedPi, this entry's
+    // placement (and possibly its group) changes too.
+    const fp = computeEntryFingerprint(e, ctx, hasPrimeAfter) + '|s' + entryStartPi;
 
-    if (i >= renderCache.length) {
-      const nodes = buildEntryNodes(e, ctx, hasPrimeAfter);
-      const frag = document.createDocumentFragment();
-      for (const n of nodes) frag.appendChild(n);
-      parentForEntry(i).appendChild(frag);
-      renderCache.push({ fp, nodes });
-    } else if (renderCache[i].fp !== fp) {
-      const old = renderCache[i];
+    if (i >= renderCache.length || renderCache[i].fp !== fp) {
+      if (i < renderCache.length) {
+        for (const n of renderCache[i].nodes) n.remove();
+      }
       const newNodes = buildEntryNodes(e, ctx, hasPrimeAfter);
-      const frag = document.createDocumentFragment();
-      for (const n of newNodes) frag.appendChild(n);
-      old.nodes[0].parentNode.insertBefore(frag, old.nodes[0]);
-      for (const n of old.nodes) n.remove();
+      placeEntryNodes(newNodes, e, visibleMissed, entryStartPi, mainPi, hasPrimeAfter);
       renderCache[i] = { fp, nodes: newNodes };
+    } else {
+      markPlacedNodes(renderCache[i].nodes, visibleMissed, entryStartPi, mainPi, hasPrimeAfter);
     }
 
     if (e.checked) {
       missed += e.missedBefore.length;
       if (e.status === 'correct') {
         if (e.skipped) skipped += 1;
+        else if (e.corrected && ctx.inPractice) fixed += 1;
         else correct += 1;
       } else if (e.status === 'wrong') {
         wrong += 1;
       }
     }
     seqPos = seqAfter;
+    displayedPi += visibleMissed + 1;
   }
 
   // Trim if entries got shorter (backspace, clearSession, …).
@@ -1330,7 +1413,7 @@ function render() {
   }
   // Drop now-empty group wrappers from the tail.
   if (gs > 0) {
-    const lastGroupIdx = entries.length > 0 ? Math.floor((entries.length - 1) / gs) : -1;
+    const lastGroupIdx = displayedPi > 0 ? Math.floor((displayedPi - 1) / gs) : -1;
     for (let k = groupElements.length - 1; k > lastGroupIdx; k--) {
       if (groupElements[k]) groupElements[k].remove();
     }
@@ -1354,11 +1437,11 @@ function render() {
   statWrong.textContent = zeroDash(wrong);
   statMissed.textContent = zeroDash(missed);
   statSkipped.textContent = zeroDash(skipped);
-  statErased.textContent = zeroDash(state.erasedErrors);
-  // Act as a key for the dotted underline on corrected digits — only meaningful
-  // in practice mode (where corrected digits actually render).
-  statErased.classList.toggle('corrected',
-    state.mode === 'practice' && state.erasedErrors > 0);
+  statFixed.textContent = zeroDash(fixed);
+  // Doubles as a key for the dotted underline on corrected digits — only
+  // meaningful in practice mode (where corrected digits actually render).
+  statFixed.classList.toggle('corrected',
+    state.mode === 'practice' && fixed > 0);
 
   updateUI();
 }
@@ -1771,7 +1854,7 @@ function loadPersistedSettings() {
     autoSecondsInput.value = savedDelay;
   }
   const savedGroup = parseInt(localStorage.getItem(STORAGE_KEYS.groupSize), 10);
-  if (!isNaN(savedGroup) && [0, 2, 3, 4, 5, 6, 7].includes(savedGroup)) {
+  if (!isNaN(savedGroup) && [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].includes(savedGroup)) {
     state.groupSize = savedGroup;
     groupSizeSelect.value = String(savedGroup);
   }

@@ -616,8 +616,8 @@ input[type="range"]:disabled {
 
 #stat-correct { color: var(--correct); }
 #stat-wrong { color: var(--wrong); }
-#stat-erased { color: var(--muted); }
-#stat-erased.corrected {
+#stat-fixed { color: var(--muted); }
+#stat-fixed.corrected {
   text-decoration: underline dotted var(--missed);
   text-underline-offset: 3px;
   text-decoration-thickness: 2px;
