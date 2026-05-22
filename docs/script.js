@@ -1813,12 +1813,17 @@ function formatTime(seconds) {
   return Math.floor(total / 60) + ':' + pad(s);
 }
 
-// In medium/low motion the countdown for competitive AND bullet folds
-// into the bottom-right stat-time slot (replacing the elapsed clock),
-// so the big top timer hides. High motion keeps the big top timer.
+// Where to display the active countdown.
+//   - Bullet: ALWAYS in the bottom-right stat-time slot — the bullet
+//     countdown is the only timer the player needs, and folding it into
+//     stat-time means it can't drift out of sync with a separate big-top
+//     reading and never duplicates the same value in two places.
+//   - Competitive: stat-time in medium/low motion (matching the comp
+//     pattern), big top in high motion.
 function showCompTimerInline() {
+  if (state.mode === 'bullet') return true;
   if (state.motionMode === 'high') return false;
-  return state.mode === 'competitive' || state.mode === 'bullet';
+  return state.mode === 'competitive';
 }
 
 // Returns the countdown remaining in seconds for competitive / bullet,
@@ -1888,12 +1893,6 @@ function tickTime() {
       statTime.textContent = formatTime(capped) + ' elapsed';
       statTime.classList.remove('countdown');
       statTime.classList.toggle('frozen', state.competitiveEnded);
-    } else if (state.mode === 'bullet') {
-      // High motion: stat-time keeps elapsed (the big top timer shows the
-      // countdown). Mirrors what competitive does in high motion.
-      statTime.textContent = formatTime(elapsed) + ' elapsed';
-      statTime.classList.remove('countdown');
-      statTime.classList.toggle('frozen', state.bulletGameOver);
     } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
       statTime.textContent = formatTime(elapsed) + ' elapsed';
       statTime.classList.remove('countdown');
@@ -1905,8 +1904,8 @@ function tickTime() {
     }
   }
 
-  // Big top countdown — only used in high motion (medium/low fold into
-  // the bottom-right stat-time slot via showCompTimerInline).
+  // Big top countdown — competitive in high motion only. Bullet always
+  // uses the inline stat-time slot, so it never reaches this branch.
   if (state.mode === 'competitive' && !showCompTimerInline()) {
     const elapsed = state.startTime === null ? 0
       : (state.competitiveEnded ? state.competitiveFrozenAt : (performance.now() - state.startTime) / 1000);
@@ -1915,14 +1914,6 @@ function tickTime() {
     compTimerEl.classList.toggle('ended', state.competitiveEnded);
     compTimerEl.classList.toggle('danger', !state.competitiveEnded && remaining <= 10 && state.gameLocked);
     compTimerEl.classList.toggle('warning', !state.competitiveEnded && remaining > 10 && remaining <= 60 && state.gameLocked);
-  } else if (state.mode === 'bullet' && !showCompTimerInline()) {
-    const elapsed = state.startTime === null ? 0
-      : (state.bulletGameOver ? state.bulletFrozenAt : (performance.now() - state.startTime) / 1000);
-    const remaining = getModeRemaining(elapsed);
-    compTimerEl.textContent = formatTime(Math.max(0, remaining));
-    compTimerEl.classList.toggle('ended', state.bulletGameOver);
-    compTimerEl.classList.toggle('danger', !state.bulletGameOver && remaining <= 10);
-    compTimerEl.classList.toggle('warning', !state.bulletGameOver && remaining > 10 && remaining <= 30);
   }
 }
 setInterval(tickTime, 250);
