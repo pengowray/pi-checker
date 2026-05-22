@@ -579,6 +579,15 @@ input[type="range"]:disabled {
   margin-left: 0.05em;
 }
 
+/* Hidden on pause / game over — the display reads as static, not "still
+   typing". Applied via the .hidden class from updateUI. */
+.cursor.hidden { visibility: hidden; }
+
+/* Low-motion: solid (no blink) so it doesn't pulse. */
+:root[data-motion="low"] .cursor {
+  animation: none;
+}
+
 @keyframes blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
@@ -686,6 +695,12 @@ input[type="range"]:disabled {
 }
 
 .keypad[hidden] { display: none; }
+
+/* User-toggled hide (separate from the alphabet/sequence-driven [hidden]
+   attribute). The keypad-hint above also collapses — without it the hint
+   would float alone above the actions row. */
+.keypad.user-hidden { display: none; }
+:root[data-keypad="hidden"] .keypad-hint { display: none; }
 
 .keypad-decimal {
   grid-template-columns: repeat(3, 1fr);
@@ -811,6 +826,24 @@ input[type="range"]:disabled {
 .key-check:hover:not(:disabled) { filter: brightness(1.08); background: var(--correct); }
 .key-check:disabled { background: var(--correct); }
 
+/* Medium / low motion: the check button toggles enabled/disabled
+   constantly during typing; the full-green colour flashes distractingly.
+   Drop the enabled-state colour to only a couple of shades brighter than
+   the disabled (which already shows green at 35%). */
+:root[data-motion="medium"] .key-check,
+:root[data-motion="low"] .key-check {
+  opacity: 0.55;
+}
+:root[data-motion="medium"] .key-check:disabled,
+:root[data-motion="low"] .key-check:disabled {
+  opacity: 0.35;
+}
+:root[data-motion="medium"] .key-check:hover:not(:disabled),
+:root[data-motion="low"] .key-check:hover:not(:disabled) {
+  opacity: 0.75;
+  filter: none;
+}
+
 .key-check::after {
   content: "";
   position: absolute;
@@ -825,11 +858,30 @@ input[type="range"]:disabled {
 .key-check.filling::after {
   animation: keyCheckFill linear forwards;
   animation-duration: var(--fill-duration, 0s);
+  animation-delay: var(--fill-delay, 0s);
 }
 
 @keyframes keyCheckFill {
   from { width: 0; }
   to { width: 100%; }
+}
+
+/* Low motion: no animated fill on the check button. */
+:root[data-motion="low"] .key-check.filling::after {
+  animation: none;
+}
+
+/* Medium and low motion: the per-digit underline strip is distracting.
+   Disable both the strip and the digit colour fade — pending digits stay
+   in --pending until they're checked. */
+:root[data-motion="medium"] .digit.auto-filling,
+:root[data-motion="low"] .digit.auto-filling {
+  animation: none;
+  color: var(--pending);
+}
+:root[data-motion="medium"] .digit.auto-filling::after,
+:root[data-motion="low"] .digit.auto-filling::after {
+  display: none;
 }
 
 .key-back {
@@ -865,6 +917,20 @@ input[type="range"]:disabled {
 
 #stop-btn:hover { background: var(--key-hover); }
 
+/* In practice mode the Stop button is just a courtesy pause — keep it
+   present but quiet. The Stop variant in comp/hardcore retains the
+   alert-red border above. */
+#stop-btn.practice-pause {
+  border-color: var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.4rem 0.9rem;
+}
+#stop-btn.practice-pause:hover {
+  background: var(--key-hover);
+  color: var(--fg);
+}
+
 #continue-btn {
   background: var(--accent);
   border: 1px solid var(--accent);
@@ -884,6 +950,9 @@ input[type="range"]:disabled {
   color: var(--muted);
   font-size: 0.95rem;
   padding-right: 0.2rem;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.15s;
 }
 
 .stat-time.frozen {
@@ -891,12 +960,28 @@ input[type="range"]:disabled {
   font-weight: 500;
 }
 
+/* Italic alone is enough to signal pause — no need for the pause-glyph
+   prefix, which read as an action button (it's just a status). */
 .stat-time.paused {
   color: var(--accent);
   font-style: italic;
 }
-.stat-time.paused::before {
-  content: "\23F8\FE0E ";
+
+/* Click-to-dim affordance. Hovering an already-dim clock raises it a bit
+   so the user can read the value without un-dimming. */
+.stat-time.dimmed { opacity: 0.18; }
+.stat-time.dimmed:hover { opacity: 0.5; }
+
+/* Competitive countdown folded into the stat-time slot (medium/low). Use
+   the same monospace face as the big comp-timer but at the stat-time
+   font size, prefixed with the outline hourglass. */
+.stat-time.countdown {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+.stat-time.countdown::before {
+  content: "\231B\FE0E\00A0";
+  opacity: 0.7;
 }
 
 #reset-btn {

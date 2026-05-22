@@ -38,7 +38,7 @@
       <div><div class="stat-label">Correct</div><div class="stat-value" id="stat-correct">&mdash;</div></div>
       <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">&mdash;</div></div>
       <div><div class="stat-label">Fixed</div><div class="stat-value" id="stat-fixed">&mdash;</div></div>
-      <div><div class="stat-label">Missed</div><div class="stat-value" id="stat-missed">&mdash;</div></div>
+      <div id="stat-missed-tile" role="button" tabindex="0" title="Click for help about Missed" aria-label="Missed digits — click for help"><div class="stat-label">Missed</div><div class="stat-value" id="stat-missed">&mdash;</div></div>
       <div id="stat-skipped-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Skipped digits — click to skip ahead"><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">&mdash;</div></div>
     </section>
 
@@ -172,7 +172,55 @@
           <small class="hint">Per digit: each digit is checked individually after the delay. On idle: the delay restarts on every key, so a burst is checked together.</small>
         </div>
 
+        <div class="setting" id="practice-lookahead-setting">
+          <div class="setting-label">
+            <label for="practice-lookahead">Auto-check after &mdash; pending</label>
+            <button type="button" class="setting-reset" data-reset="practice-lookahead" hidden aria-label="Reset lookahead to default">&#x2715;</button>
+          </div>
+          <input type="range" id="practice-lookahead" min="0" max="20" value="0" step="1">
+          <small class="hint">Combines with the timing above. 0 = off. When set, the oldest pending digit auto-checks once N newer ones have piled up behind it.</small>
+        </div>
+
         <h3 class="settings-subhead">Display</h3>
+
+        <div class="setting">
+          <div class="setting-label">
+            Motion
+            <button type="button" class="setting-reset" data-reset="motion-mode" hidden aria-label="Reset motion to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Motion">
+            <label class="mode-option">
+              <input type="radio" name="motion-mode" value="low">
+              <span>Low</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="motion-mode" value="medium" checked>
+              <span>Medium</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="motion-mode" value="high">
+              <span>High</span>
+            </label>
+          </div>
+          <small class="hint">Low: solid cursor, no animated indicators, timer hidden in practice. Medium: subtle check button, last-digit indicator on check. High: blinking cursor and per-digit auto-fill animation.</small>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            Keypad
+            <button type="button" class="setting-reset" data-reset="hide-keypad" hidden aria-label="Reset keypad to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Show keypad">
+            <label class="mode-option">
+              <input type="radio" name="hide-keypad" value="show" checked>
+              <span>Show</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="hide-keypad" value="hide">
+              <span>Hide</span>
+            </label>
+          </div>
+        </div>
 
         <div class="setting">
           <div class="setting-label">Theme</div>
@@ -242,6 +290,21 @@
             <option value="12">Groups of 12</option>
           </select>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="missed-modal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="About missed digits">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>About &ldquo;Missed&rdquo;</h2>
+        <button id="missed-close" aria-label="Close" data-close>&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p>If you skip a digit while typing &mdash; say you type the 7th digit but it actually matches the 8th &mdash; the checker treats the 7th as missed, and the digit you typed is scored against the 8th instead.</p>
+        <p>The skipped digit appears as a small inline &ldquo;ghost&rdquo; before the digit you actually typed. Missed digits count toward the <strong>Missed</strong> stat and do not count as wrong.</p>
+        <p>To trigger missed-detection the checker needs two more matching digits after the skip, so it only kicks in once you have typed enough context.</p>
       </div>
     </div>
   </div>

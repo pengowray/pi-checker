@@ -243,7 +243,10 @@ deriveTau();
 })();
 
 // ---- Constants ----
-const MODE_FIXED_DELAY = { competitive: 2, hardcore: 0 };
+// Competitive uses per-digit auto-check at COMPETITIVE_PER_DIGIT_SECONDS
+// (defined below). Hardcore is instant (0). Kept as a single literal so
+// MODE_FIXED_DELAY can sit at the top of the constants block.
+const MODE_FIXED_DELAY = { competitive: 30, hardcore: 0 };
 const DEFAULT_PRACTICE_DELAY = 2;
 const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
@@ -257,11 +260,33 @@ const STORAGE_KEYS = {
   keypadFlip: 'pi-keypad-flip',
   practiceDisplay: 'pi-practice-display',
   practiceAutoCheckStyle: 'pi-practice-autocheck-style',
+  motionMode: 'pi-motion-mode',
+  hideKeypad: 'pi-hide-keypad',
+  practiceLookahead: 'pi-practice-lookahead',
 };
 
 const DEFAULT_KEYPAD_FLIP = false;
 const DEFAULT_PRACTICE_DISPLAY = 'annotations';
 const DEFAULT_AUTOCHECK_STYLE = 'per-digit'; // per-digit | on-idle
+// Motion-reduction levels. 'medium' is the default; 'low' is auto-picked
+// when the browser advertises prefers-reduced-motion. 'high' restores the
+// blinking cursor and per-digit auto-fill animation.
+function defaultMotionMode() {
+  try {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return 'low';
+    }
+  } catch (e) { /* matchMedia missing — fall through */ }
+  return 'medium';
+}
+// Competitive mode: each digit auto-checks after this many seconds, OR
+// when COMPETITIVE_LOOKAHEAD newer digits stack up behind it (whichever
+// fires first). Keep this in sync with MODE_FIXED_DELAY.competitive.
+const COMPETITIVE_PER_DIGIT_SECONDS = 30;
+const COMPETITIVE_LOOKAHEAD = 10;
+// Practice-mode lookahead default: 0 disables the lookahead-based
+// auto-check (the per-digit / on-idle timer is the only trigger).
+const DEFAULT_PRACTICE_LOOKAHEAD = 0;
 
 const state = {
   sequenceId: 'pi',
@@ -295,6 +320,13 @@ const state = {
   practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
   practiceAutoCheckStyle: DEFAULT_AUTOCHECK_STYLE,
   compTimerHidden: false,
+  elapsedDimmed: false,
+  motionMode: defaultMotionMode(),
+  hideKeypad: false,
+  // Practice-mode lookahead: when N > 0, the oldest pending entry auto-
+  // checks once N newer pending entries have stacked behind it. Combines
+  // with per-digit / on-idle / manual — whichever fires first wins.
+  practiceLookahead: DEFAULT_PRACTICE_LOOKAHEAD,
 };
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
@@ -337,6 +369,13 @@ const skipModal = document.getElementById('skip-modal');
 const skipOneBtn = document.getElementById('skip-one');
 const skipConfirmBtn = document.getElementById('skip-confirm');
 const skipCountInput = document.getElementById('skip-count');
+const missedTile = document.getElementById('stat-missed-tile');
+const missedModal = document.getElementById('missed-modal');
+const motionModeInputs = document.querySelectorAll('input[name="motion-mode"]');
+const hideKeypadInputs = document.querySelectorAll('input[name="hide-keypad"]');
+const practiceLookaheadInput = document.getElementById('practice-lookahead');
+const practiceLookaheadSetting = document.getElementById('practice-lookahead-setting');
+const cursorEl = document.getElementById('cursor');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -370,6 +409,62 @@ themeInputs.forEach(input => {
   });
 });
 initTheme();
+
+// ---- Motion mode (high/medium/low) ----
+function applyMotionMode(mode, persist = true) {
+  if (mode !== 'high' && mode !== 'medium' && mode !== 'low') mode = defaultMotionMode();
+  state.motionMode = mode;
+  document.documentElement.setAttribute('data-motion', mode);
+  motionModeInputs.forEach(input => { input.checked = input.value === mode; });
+  if (persist) localStorage.setItem(STORAGE_KEYS.motionMode, mode);
+  // Low-mode practice starts with the elapsed timer dimmed; users can
+  // click to reveal. Other transitions don't auto-toggle dimming.
+  state.elapsedDimmed = (mode === 'low' && state.mode === 'practice');
+}
+motionModeInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    applyMotionMode(input.value);
+    updateResetVisibility();
+    render();
+  });
+});
+
+// ---- Hide keypad ----
+function applyHideKeypad(hide, persist = true) {
+  state.hideKeypad = !!hide;
+  document.documentElement.setAttribute('data-keypad', hide ? 'hidden' : 'shown');
+  hideKeypadInputs.forEach(input => { input.checked = input.value === (hide ? 'hide' : 'show'); });
+  if (persist) localStorage.setItem(STORAGE_KEYS.hideKeypad, hide ? '1' : '0');
+}
+hideKeypadInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    applyHideKeypad(input.value === 'hide');
+    updateResetVisibility();
+  });
+});
+
+// ---- Practice lookahead slider ----
+practiceLookaheadInput.addEventListener('input', () => {
+  const v = parseInt(practiceLookaheadInput.value, 10) || 0;
+  state.practiceLookahead = v;
+  localStorage.setItem(STORAGE_KEYS.practiceLookahead, String(v));
+  renderLookaheadLabel();
+  updateResetVisibility();
+  // A lower limit may now mean older pending entries should fire.
+  checkLookaheadAutoCheck();
+});
+
+function renderLookaheadLabel() {
+  const v = state.practiceLookahead | 0;
+  const labelEl = practiceLookaheadSetting && practiceLookaheadSetting.querySelector('label');
+  if (labelEl) {
+    labelEl.innerHTML = v > 0
+      ? 'Auto-check after <strong>' + v + '</strong> pending'
+      : 'Auto-check after &mdash; pending';
+  }
+}
 
 // ---- Keypad flip (phone vs numpad) ----
 function applyKeypadFlip(flipped) {
@@ -648,6 +743,10 @@ function applyModeDefaults() {
     state.autoCheckSeconds = state.practiceDelay;
   }
   autoSecondsInput.value = state.autoCheckSeconds;
+  // Low motion + practice starts with the elapsed timer dimmed; users
+  // click to reveal. Re-evaluate on every mode switch so leaving and
+  // coming back to practice re-applies the default.
+  state.elapsedDimmed = (state.motionMode === 'low' && state.mode === 'practice');
   renderDelayLabel();
   updateModeBadge();
   refreshAutoCheckScheduling();
@@ -658,9 +757,17 @@ function updateModeBadge() {
   let delayText;
   if (state.mode === 'competitive' && state.competitiveEnded) delayText = 'ended';
   else if (state.mode === 'hardcore' && state.hardcoreFailed) delayText = 'failed';
+  else if (state.mode === 'competitive') {
+    delayText = COMPETITIVE_PER_DIGIT_SECONDS + 's/digit, +' + COMPETITIVE_LOOKAHEAD;
+  }
   else if (isManual()) delayText = 'manual';
   else if (state.autoCheckSeconds === 0) delayText = 'instant';
-  else delayText = state.autoCheckSeconds + 's auto-check';
+  else {
+    delayText = state.autoCheckSeconds + 's auto-check';
+    if (state.mode === 'practice' && state.practiceLookahead > 0) {
+      delayText += ', +' + state.practiceLookahead;
+    }
+  }
   modeBadge.textContent = modeName + ' · ' + delayText;
   modeBadge.classList.toggle('locked', state.gameLocked && !state.competitiveEnded);
 }
@@ -675,7 +782,8 @@ function updateKeypadHint() {
 function updateModeHint() {
   const hints = {
     practice: 'Type or paste digits. Backspace removes recent input.',
-    competitive: '2s auto-check, 15 minute limit, wrong digits stay locked. Reset is required to start.',
+    competitive: COMPETITIVE_PER_DIGIT_SECONDS + 's per-digit auto-check (or after ' +
+      COMPETITIVE_LOOKAHEAD + ' more digits, whichever first), 15 minute limit, wrong digits stay locked. Reset is required to start.',
     hardcore: 'Instant lock-in, no backspace. One wrong digit ends the run. Reset is required to start.',
   };
   modeHint.textContent = hints[state.mode] || '';
@@ -816,6 +924,7 @@ function inputDigit(d) {
   } else {
     schedulePerDigitTimer(entry);
   }
+  checkLookaheadAutoCheck();
   checkHardcoreFail();
   render();
 }
@@ -942,6 +1051,8 @@ function backspace() {
   computeStatuses(Math.max(0, state.entries.length - 1));
   if (useOnIdleAutoCheck()) {
     resetAutoCheckTimer();
+  } else {
+    syncCheckBarPerDigit();
   }
   render();
 }
@@ -964,6 +1075,34 @@ function hasPending() {
 
 function useOnIdleAutoCheck() {
   return state.mode === 'practice' && state.practiceAutoCheckStyle === 'on-idle';
+}
+
+// Maximum number of pending entries allowed at once. When exceeded, the
+// oldest pending entry auto-checks. Hardcore is 0 (instant), so its
+// per-digit timer never accumulates anyway.
+function lookaheadLimit() {
+  if (state.mode === 'competitive') return COMPETITIVE_LOOKAHEAD;
+  if (state.mode === 'practice') return state.practiceLookahead | 0;
+  return 0;
+}
+
+// Walks state.entries front-to-back, force-checking the oldest pending
+// entry until the pending count is at most `lookaheadLimit()`. Called
+// after each new entry is typed, and after the practice slider changes.
+function checkLookaheadAutoCheck() {
+  const limit = lookaheadLimit();
+  if (limit <= 0) return;
+  let pendingCount = 0;
+  for (const e of state.entries) if (!e.checked) pendingCount++;
+  if (pendingCount <= limit) return;
+  for (let i = 0; i < state.entries.length && pendingCount > limit; i++) {
+    const e = state.entries[i];
+    if (e.checked) continue;
+    if (e._timerId) { clearTimeout(e._timerId); e._timerId = null; }
+    e.autoCheckStartedAt = null;
+    e.checked = true;
+    pendingCount--;
+  }
 }
 
 function resetAutoCheckTimer() {
@@ -1001,8 +1140,30 @@ function schedulePerDigitTimer(entry) {
   entry._timerId = setTimeout(() => {
     entry._timerId = null;
     entry.checked = true;
+    syncCheckBarPerDigit();
     render();
   }, ms);
+  // Medium motion replaces the per-digit underline with a single bar on
+  // the check button that tracks the most recently scheduled entry.
+  syncCheckBarPerDigit();
+}
+
+// Drives the medium-mode check-button fill from the latest pending entry.
+// Low motion explicitly suppresses the bar (CSS); high motion uses the
+// per-digit underline instead and doesn't need this.
+function syncCheckBarPerDigit() {
+  if (state.motionMode !== 'medium') return;
+  if (useOnIdleAutoCheck()) return; // on-idle already drives the bar.
+  // Latest pending entry with a live timer.
+  let latest = null;
+  for (let i = state.entries.length - 1; i >= 0; i--) {
+    const e = state.entries[i];
+    if (!e.checked && e.autoCheckStartedAt != null) { latest = e; break; }
+  }
+  if (!latest) { stopCheckBar(); return; }
+  const totalMs = state.autoCheckSeconds * 1000;
+  const elapsed = Math.max(0, performance.now() - latest.autoCheckStartedAt);
+  startCheckBar(totalMs, elapsed);
 }
 
 function schedulePerDigitForAllPending() {
@@ -1033,14 +1194,16 @@ function refreshAutoCheckScheduling() {
     resetAutoCheckTimer();
   } else {
     schedulePerDigitForAllPending();
+    syncCheckBarPerDigit();
   }
 }
 
-function startCheckBar(ms) {
+function startCheckBar(ms, elapsedMs = 0) {
   allCheckBtns.forEach(btn => {
     btn.classList.remove('filling');
     void btn.offsetWidth; // restart animation by forcing reflow
     btn.style.setProperty('--fill-duration', ms + 'ms');
+    btn.style.setProperty('--fill-delay', `-${Math.max(0, elapsedMs)}ms`);
     btn.classList.add('filling');
   });
 }
@@ -1446,16 +1609,36 @@ function render() {
   updateUI();
 }
 
+// M:SS, H:MM:SS once the duration crosses an hour, Dd HH:MM:SS once a day.
+// Negative durations are clamped to 0.
 function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return m + ':' + String(s).padStart(2, '0');
+  if (!isFinite(seconds) || seconds < 0) seconds = 0;
+  const total = Math.floor(seconds);
+  const s = total % 60;
+  const m = Math.floor(total / 60) % 60;
+  const h = Math.floor(total / 3600) % 24;
+  const d = Math.floor(total / 86400);
+  const pad = (n) => String(n).padStart(2, '0');
+  if (d > 0) return d + 'd ' + pad(h) + ':' + pad(m) + ':' + pad(s);
+  if (h > 0) return h + ':' + pad(m) + ':' + pad(s);
+  return Math.floor(total / 60) + ':' + pad(s);
+}
+
+// In medium/low motion the competitive countdown moves to the bottom-right
+// stat-time slot (replacing the elapsed clock), so the big top timer hides.
+function showCompTimerInline() {
+  return state.mode === 'competitive' && state.motionMode !== 'high';
 }
 
 function tickTime() {
-  // Elapsed time (small indicator)
   if (state.startTime === null) {
-    statTime.textContent = '0:00';
+    if (showCompTimerInline()) {
+      statTime.textContent = formatTime(COMPETITIVE_LIMIT_SECONDS) + ' remaining';
+      statTime.classList.add('countdown');
+    } else {
+      statTime.textContent = '0:00 elapsed';
+      statTime.classList.remove('countdown');
+    }
     statTime.classList.remove('frozen');
   } else {
     if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded) {
@@ -1478,21 +1661,30 @@ function tickTime() {
 
     statTime.classList.toggle('paused', state.mode === 'practice' && state.practicePaused);
 
-    if (state.mode === 'competitive') {
+    if (showCompTimerInline()) {
+      const remaining = Math.max(0, COMPETITIVE_LIMIT_SECONDS - elapsed);
+      statTime.textContent = formatTime(remaining) + ' remaining';
+      statTime.classList.add('countdown');
+      statTime.classList.toggle('frozen', state.competitiveEnded);
+    } else if (state.mode === 'competitive') {
       const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
-      statTime.textContent = formatTime(capped);
+      statTime.textContent = formatTime(capped) + ' elapsed';
+      statTime.classList.remove('countdown');
       statTime.classList.toggle('frozen', state.competitiveEnded);
     } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
-      statTime.textContent = formatTime(elapsed);
+      statTime.textContent = formatTime(elapsed) + ' elapsed';
+      statTime.classList.remove('countdown');
       statTime.classList.add('frozen');
     } else {
-      statTime.textContent = formatTime(elapsed);
+      statTime.textContent = formatTime(elapsed) + ' elapsed';
+      statTime.classList.remove('countdown');
       statTime.classList.remove('frozen');
     }
   }
 
-  // Big countdown (competitive only)
-  if (state.mode === 'competitive') {
+  // Big countdown (competitive only, high motion only — in medium/low it
+  // lives in the bottom-right stat-time slot instead).
+  if (state.mode === 'competitive' && !showCompTimerInline()) {
     let remaining;
     if (state.startTime === null) {
       remaining = COMPETITIVE_LIMIT_SECONDS;
@@ -1551,6 +1743,9 @@ function updateUI() {
   // Stop button: ends in comp/hardcore, pseudo-pauses in practice
   stopBtn.hidden = !(compActive || hardcoreActive || practiceActive);
   stopBtn.textContent = state.mode === 'practice' ? 'Pause' : 'Stop';
+  // Practice-mode Pause is a quiet courtesy button — toned-down border
+  // and colour. Comp/hardcore Stop keeps the alert-red border.
+  stopBtn.classList.toggle('practice-pause', state.mode === 'practice');
 
   continueBtn.hidden = !gameOver;
 
@@ -1558,10 +1753,26 @@ function updateUI() {
   // the prominent button and demote Continue.
   resetBtn.classList.toggle('primary', gameOver);
   continueBtn.classList.toggle('secondary', gameOver);
-  compTimerEl.hidden = state.mode !== 'competitive';
-  // Dim when the user has clicked it to hide, but force visible when the
-  // session is over so the final time stands out.
+  // Big top timer is only used in high motion mode. Medium/low fold the
+  // countdown into the bottom-right stat-time slot.
+  compTimerEl.hidden = state.mode !== 'competitive' || showCompTimerInline();
   compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded);
+
+  // Click-to-dim elapsed/countdown clock. Also force-dimmed by default in
+  // low-motion practice (the user can click to reveal).
+  statTime.classList.toggle('dimmed', state.elapsedDimmed && !state.competitiveEnded && !state.hardcoreFailed);
+
+  // Cursor: hidden on pause / game-over (any mode), so the display reads
+  // as static rather than "still typing".
+  const cursorHidden = state.practicePaused || gameOver;
+  if (cursorEl) cursorEl.classList.toggle('hidden', cursorHidden);
+
+  // Keypad hide toggle: collapses the keypads to recover vertical room.
+  keypadDecimal.classList.toggle('user-hidden', state.hideKeypad);
+  keypadHex.classList.toggle('user-hidden', state.hideKeypad);
+
+  // Practice-lookahead setting is practice-only.
+  if (practiceLookaheadSetting) practiceLookaheadSetting.hidden = state.mode !== 'practice';
 
   updateModeHint();
   updateModeBadge();
@@ -1613,6 +1824,13 @@ compTimerEl.addEventListener('keydown', (e) => {
   }
 });
 
+// Click the elapsed/remaining clock to toggle dim/show. Works in every
+// mode; low-motion practice starts already dimmed.
+statTime.addEventListener('click', () => {
+  state.elapsedDimmed = !state.elapsedDimmed;
+  updateUI();
+});
+
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -1633,6 +1851,14 @@ document.addEventListener('keydown', (e) => {
   if (!skipModal.hidden) {
     if (e.key === 'Escape') {
       closeSkipModal();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (!missedModal.hidden) {
+    if (e.key === 'Escape') {
+      closeMissedModal();
       e.preventDefault();
     }
     return;
@@ -1713,6 +1939,22 @@ resetBtns.forEach(btn => {
       updateResetVisibility();
       refreshAutoCheckScheduling();
       render();
+    } else if (target === 'motion-mode') {
+      applyMotionMode(defaultMotionMode());
+      updateResetVisibility();
+      render();
+    } else if (target === 'hide-keypad') {
+      applyHideKeypad(false);
+      updateResetVisibility();
+      render();
+    } else if (target === 'practice-lookahead') {
+      state.practiceLookahead = DEFAULT_PRACTICE_LOOKAHEAD;
+      practiceLookaheadInput.value = String(DEFAULT_PRACTICE_LOOKAHEAD);
+      localStorage.setItem(STORAGE_KEYS.practiceLookahead, String(DEFAULT_PRACTICE_LOOKAHEAD));
+      renderLookaheadLabel();
+      updateResetVisibility();
+      checkLookaheadAutoCheck();
+      render();
     }
   });
 });
@@ -1727,6 +1969,9 @@ function updateResetVisibility() {
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
     else if (target === 'practice-display') isDefault = state.practiceDisplay === DEFAULT_PRACTICE_DISPLAY;
     else if (target === 'autocheck-style') isDefault = state.practiceAutoCheckStyle === DEFAULT_AUTOCHECK_STYLE;
+    else if (target === 'motion-mode') isDefault = state.motionMode === defaultMotionMode();
+    else if (target === 'hide-keypad') isDefault = state.hideKeypad === false;
+    else if (target === 'practice-lookahead') isDefault = state.practiceLookahead === DEFAULT_PRACTICE_LOOKAHEAD;
     btn.hidden = isDefault;
   });
 }
@@ -1792,6 +2037,26 @@ skipCountInput.addEventListener('keydown', (e) => {
 
 skipModal.addEventListener('click', (e) => {
   if (e.target && e.target.hasAttribute('data-close')) closeSkipModal();
+});
+
+// ---- Missed help modal ----
+function openMissedModal() {
+  missedModal.hidden = false;
+  missedModal.setAttribute('aria-hidden', 'false');
+}
+function closeMissedModal() {
+  missedModal.hidden = true;
+  missedModal.setAttribute('aria-hidden', 'true');
+}
+missedTile.addEventListener('click', openMissedModal);
+missedTile.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    openMissedModal();
+  }
+});
+missedModal.addEventListener('click', (e) => {
+  if (e.target && e.target.hasAttribute('data-close')) closeMissedModal();
 });
 
 // ---- Async load of long sequence data ----
@@ -1876,6 +2141,16 @@ function loadPersistedSettings() {
     const radio = document.querySelector(`input[name="autocheck-style"][value="${savedAutoCheckStyle}"]`);
     if (radio) radio.checked = true;
   }
+  const savedMotion = localStorage.getItem(STORAGE_KEYS.motionMode);
+  applyMotionMode(savedMotion || defaultMotionMode(), false);
+  const savedHideKeypad = localStorage.getItem(STORAGE_KEYS.hideKeypad);
+  applyHideKeypad(savedHideKeypad === '1', false);
+  const savedLookahead = parseInt(localStorage.getItem(STORAGE_KEYS.practiceLookahead), 10);
+  if (!isNaN(savedLookahead) && savedLookahead >= 0 && savedLookahead <= 20) {
+    state.practiceLookahead = savedLookahead;
+    practiceLookaheadInput.value = String(savedLookahead);
+  }
+  renderLookaheadLabel();
 }
 
 // ---- Init ----
