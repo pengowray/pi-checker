@@ -95,6 +95,8 @@
     </footer>
   </main>
 
+  <button id="zen-exit" type="button" aria-label="Exit zen mode" title="Exit zen mode (Esc)">&#x2715;</button>
+
   <div id="settings-modal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="modal-backdrop" data-close></div>
     <div class="modal-card">
@@ -201,8 +203,12 @@
               <input type="radio" name="motion-mode" value="high">
               <span>High</span>
             </label>
+            <label class="mode-option">
+              <input type="radio" name="motion-mode" value="zen">
+              <span>Zen</span>
+            </label>
           </div>
-          <small class="hint">Low: solid cursor, no animated indicators, timer hidden in practice. Medium: subtle check button, last-digit indicator on check. High: blinking cursor and per-digit auto-fill animation.</small>
+          <small class="hint">Low: solid cursor, no animated indicators, timer hidden in practice. Medium: subtle check button, last-digit indicator on check. High: blinking cursor and per-digit auto-fill animation. Zen: greyscale, minimal interface, counters only shown on pause or game over (Esc to exit).</small>
         </div>
 
         <div class="setting">

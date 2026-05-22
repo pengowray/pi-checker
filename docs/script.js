@@ -261,6 +261,7 @@ const STORAGE_KEYS = {
   practiceDisplay: 'pi-practice-display',
   practiceAutoCheckStyle: 'pi-practice-autocheck-style',
   motionMode: 'pi-motion-mode',
+  preZenMotion: 'pi-pre-zen-motion',
   hideKeypad: 'pi-hide-keypad',
   practiceLookahead: 'pi-practice-lookahead',
 };
@@ -322,6 +323,7 @@ const state = {
   compTimerHidden: false,
   elapsedDimmed: false,
   motionMode: defaultMotionMode(),
+  preZenMotion: null,
   hideKeypad: false,
   // Practice-mode lookahead: when N > 0, the oldest pending entry auto-
   // checks once N newer pending entries have stacked behind it. Combines
@@ -377,6 +379,7 @@ const hideKeypadInputs = document.querySelectorAll('input[name="hide-keypad"]');
 const practiceLookaheadInput = document.getElementById('practice-lookahead');
 const practiceLookaheadSetting = document.getElementById('practice-lookahead-setting');
 const cursorEl = document.getElementById('cursor');
+const zenExitBtn = document.getElementById('zen-exit');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -411,9 +414,18 @@ themeInputs.forEach(input => {
 });
 initTheme();
 
-// ---- Motion mode (high/medium/low) ----
+// ---- Motion mode (high/medium/low/zen) ----
 function applyMotionMode(mode, persist = true) {
-  if (mode !== 'high' && mode !== 'medium' && mode !== 'low') mode = defaultMotionMode();
+  if (mode !== 'high' && mode !== 'medium' && mode !== 'low' && mode !== 'zen') {
+    mode = defaultMotionMode();
+  }
+  // Save the previous motion when entering zen so Esc / corner-× can
+  // restore it. If the user reloads in zen, we'd lose the previous
+  // mode, so persist preZenMotion too.
+  if (mode === 'zen' && state.motionMode !== 'zen') {
+    state.preZenMotion = state.motionMode;
+    try { localStorage.setItem(STORAGE_KEYS.preZenMotion, state.motionMode); } catch (e) {}
+  }
   state.motionMode = mode;
   document.documentElement.setAttribute('data-motion', mode);
   motionModeInputs.forEach(input => { input.checked = input.value === mode; });
@@ -421,6 +433,14 @@ function applyMotionMode(mode, persist = true) {
   // Low-mode practice starts with the elapsed timer dimmed; users can
   // click to reveal. Other transitions don't auto-toggle dimming.
   state.elapsedDimmed = (mode === 'low' && state.mode === 'practice');
+}
+
+function exitZenMode() {
+  if (state.motionMode !== 'zen') return;
+  const restore = state.preZenMotion || defaultMotionMode();
+  applyMotionMode(restore);
+  updateResetVisibility();
+  render();
 }
 motionModeInputs.forEach(input => {
   input.addEventListener('change', () => {
@@ -1773,6 +1793,10 @@ function updateUI() {
   // Practice-lookahead setting is practice-only.
   if (practiceLookaheadSetting) practiceLookaheadSetting.hidden = state.mode !== 'practice';
 
+  // Zen reveals the stats only on pause or game-over.
+  document.documentElement.classList.toggle('zen-reveal',
+    state.motionMode === 'zen' && (state.practicePaused || gameOver));
+
   updateModeHint();
   updateModeBadge();
 }
@@ -1830,6 +1854,9 @@ statTime.addEventListener('click', () => {
   updateUI();
 });
 
+// Corner-× to exit zen mode (Esc handled in the keydown listener).
+if (zenExitBtn) zenExitBtn.addEventListener('click', exitZenMode);
+
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -1860,6 +1887,13 @@ document.addEventListener('keydown', (e) => {
       closeMissedModal();
       e.preventDefault();
     }
+    return;
+  }
+
+  // Esc exits zen mode (no modals are open at this point).
+  if (e.key === 'Escape' && state.motionMode === 'zen') {
+    exitZenMode();
+    e.preventDefault();
     return;
   }
 
@@ -2153,6 +2187,13 @@ function loadPersistedSettings() {
     state.practiceAutoCheckStyle = savedAutoCheckStyle;
     const radio = document.querySelector(`input[name="autocheck-style"][value="${savedAutoCheckStyle}"]`);
     if (radio) radio.checked = true;
+  }
+  // Restore preZenMotion FIRST so a reload-in-zen still knows what to
+  // exit back to; applyMotionMode wouldn't overwrite it (we're not
+  // entering zen, just rehydrating it).
+  const savedPreZen = localStorage.getItem(STORAGE_KEYS.preZenMotion);
+  if (savedPreZen === 'high' || savedPreZen === 'medium' || savedPreZen === 'low') {
+    state.preZenMotion = savedPreZen;
   }
   const savedMotion = localStorage.getItem(STORAGE_KEYS.motionMode);
   applyMotionMode(savedMotion || defaultMotionMode(), false);
