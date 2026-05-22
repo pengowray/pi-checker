@@ -1092,6 +1092,9 @@ function inputDigit(d) {
   if (state.startTime === null) {
     state.startTime = performance.now();
     if (state.mode === 'competitive') state.gameLocked = true;
+    // Bullet's three timing inputs (and their reset-to-default button)
+    // lock the moment the run starts; refresh so the × hides immediately.
+    if (state.mode === 'bullet') updateResetVisibility();
   }
 
   const t = performance.now() - state.startTime;
@@ -2330,9 +2333,17 @@ function updateResetVisibility() {
     else if (target === 'motion-mode') isDefault = state.motionMode === defaultMotionMode();
     else if (target === 'hide-keypad') isDefault = state.hideKeypad === false;
     else if (target === 'practice-lookahead') isDefault = state.practiceLookahead === DEFAULT_PRACTICE_LOOKAHEAD;
-    else if (target === 'bullet') isDefault = state.bulletStartSeconds === DEFAULT_BULLET_START
-      && state.bulletBonusSeconds === DEFAULT_BULLET_BONUS
-      && state.bulletPenaltySeconds === DEFAULT_BULLET_PENALTY;
+    else if (target === 'bullet') {
+      // Reset-to-default is also hidden once a bullet run is in flight
+      // (or post-game-over), matching the lock on the three inputs — the
+      // player can't retroactively change start/bonus/penalty mid-run.
+      const bulletLocked = state.mode === 'bullet' && state.startTime !== null;
+      isDefault = bulletLocked || (
+        state.bulletStartSeconds === DEFAULT_BULLET_START
+        && state.bulletBonusSeconds === DEFAULT_BULLET_BONUS
+        && state.bulletPenaltySeconds === DEFAULT_BULLET_PENALTY
+      );
+    }
     btn.hidden = isDefault;
   });
 }
