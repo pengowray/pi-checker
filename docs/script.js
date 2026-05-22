@@ -350,6 +350,13 @@ const state = {
   // than once, even if the user erases the wrong digit and types another
   // wrong one there.
   bulletPenalizedPositions: new Set(),
+  // Highest pi-position-index that has ever been scored (bonus or
+  // penalty) in this run. Any position ≤ this is "behind us" and can't
+  // score on a fresh entry — closes the type-then-backspace-then-retype
+  // exploit (each retype would otherwise re-bonus the same position).
+  // The per-entry refund path still fires for missed-detection rescoring
+  // because that's gated on e.bulletPenalized, not position.
+  bulletMaxScoredPos: -1,
 };
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
@@ -826,6 +833,7 @@ function clearSession() {
   state.bulletEndReason = null;
   state.bulletFrozenAt = 0;
   state.bulletPenalizedPositions.clear();
+  state.bulletMaxScoredPos = -1;
 }
 
 function applyModeDefaults() {
@@ -962,29 +970,35 @@ function applyBulletScoring() {
     if (e.skipped || e.corrected) continue;
     const piPos = e.seqIdxAfter > 0 ? e.seqIdxAfter - 1 : -1;
     if (piPos < 0) continue;
+
+    // Positions ≤ the high-water mark have already had their one shot.
+    // A fresh entry there (e.g. after backspace+retype) can't bonus or
+    // penalize again. The per-entry refund below is exempt — it's keyed
+    // on e.bulletPenalized, which only the original wrong entry carries.
+    const locked = piPos <= state.bulletMaxScoredPos;
+
     if (e.status === 'wrong') {
-      // Only deduct (and only mark this entry as having paid the penalty)
-      // if the position hasn't already been penalised. Otherwise the
-      // entry is silently wrong: no time deducted, and no refund possible
-      // later because e.bulletPenalized stays false.
-      if (!e.bulletPenalized && !state.bulletPenalizedPositions.has(piPos)) {
+      if (!e.bulletPenalized && !locked && !state.bulletPenalizedPositions.has(piPos)) {
         state.bulletBudget -= state.bulletPenaltySeconds;
         state.bulletPenalizedPositions.add(piPos);
         e.bulletPenalized = true;
+        state.bulletMaxScoredPos = piPos;
         floatBulletDelta(-state.bulletPenaltySeconds);
       }
     } else if (e.status === 'correct') {
       if (e.bulletPenalized && !e.bulletRefunded) {
-        // Only the entry that actually paid the penalty can get it back.
-        // The position stays in bulletPenalizedPositions so re-typing
-        // wrong here still can't be re-penalised.
+        // Only the entry that actually paid the penalty can get it back
+        // (typically via missed-detection rescoring the same entry as
+        // correct later in the run). The position stays "scored", so a
+        // new entry there can't re-bonus.
         state.bulletBudget += state.bulletPenaltySeconds;
         e.bulletRefunded = true;
         floatBulletDelta(+state.bulletPenaltySeconds);
       }
-      if (!e.bulletBonused) {
+      if (!e.bulletBonused && !locked) {
         state.bulletBudget += state.bulletBonusSeconds;
         e.bulletBonused = true;
+        state.bulletMaxScoredPos = piPos;
         floatBulletDelta(+state.bulletBonusSeconds);
       }
     }

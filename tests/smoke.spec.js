@@ -374,3 +374,65 @@ test('render: adding one digit at 10k entries stays cheap', async ({ page }) => 
   });
   expect(ms).toBeLessThan(150);
 });
+
+// ---- Bullet scoring ----
+//
+// Regression: typing a correct digit, backspacing, and re-typing it must
+// only bonus once. The bug allowed each retype to fire +5 because the
+// per-entry bulletBonused flag was lost when the entry was popped.
+test('bullet: re-typing the same digit after backspace cannot double-bonus', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await setMode(page, 'bullet');
+  await page.locator('#settings-close').click();
+  // Default bullet: 60s start, +5s bonus, -30s penalty.
+  // Type "1" (correct first digit of pi after the "3." prefix), then
+  // backspace+retype 10 times. Only the very first "1" should bonus.
+  for (let i = 0; i < 10; i++) {
+    await page.keyboard.type('1');
+    await page.keyboard.press('Backspace');
+  }
+  // Leave a single "1" on screen and stop the run so the score modal
+  // reports the remaining budget — easier to assert than the live clock.
+  await page.keyboard.type('1');
+  await page.locator('#stop-btn').click();
+  await expect(page.locator('#bullet-score-modal')).toBeVisible();
+
+  // 1 bonus = budget 65s, minus a fraction-of-a-second of elapsed run.
+  // If the bug were still present, 11 bonuses → budget ~115s → "1:5x".
+  const headline = await page.locator('#bullet-score-headline').textContent();
+  const match = headline.match(/Stopped with (\d+):(\d+) remaining/);
+  expect(match).not.toBeNull();
+  const totalSec = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  expect(totalSec).toBeLessThanOrEqual(65);
+  expect(totalSec).toBeGreaterThan(55);
+
+  // Only the single surviving "1" should count as correct.
+  await expect(page.locator('#bullet-score-correct')).toHaveText('1');
+});
+
+// Same exploit pattern with a multi-digit sequence: type "1415", backspace
+// it all, retype. The full-sequence bonus is +20 (4 digits × +5); the bug
+// would let repeated cycles pile up far beyond that.
+test('bullet: cycling "1415" via backspace cannot rack up bonuses', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await setMode(page, 'bullet');
+  await page.locator('#settings-close').click();
+  for (let i = 0; i < 5; i++) {
+    await page.keyboard.type('1415');
+    for (let j = 0; j < 4; j++) await page.keyboard.press('Backspace');
+  }
+  // Final pass left on screen.
+  await page.keyboard.type('1415');
+  await page.locator('#stop-btn').click();
+  await expect(page.locator('#bullet-score-modal')).toBeVisible();
+
+  // 4 bonuses total = +20s. Budget ≤ 80s; the bug would push it past 100s.
+  const headline = await page.locator('#bullet-score-headline').textContent();
+  const match = headline.match(/Stopped with (\d+):(\d+) remaining/);
+  expect(match).not.toBeNull();
+  const totalSec = parseInt(match[1], 10) * 60 + parseInt(match[2], 10);
+  expect(totalSec).toBeLessThanOrEqual(80);
+  expect(totalSec).toBeGreaterThan(70);
+
+  await expect(page.locator('#bullet-score-correct')).toHaveText('4');
+});
