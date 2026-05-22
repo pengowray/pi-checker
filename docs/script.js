@@ -2187,6 +2187,20 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Hidden: "Z" toggles zen motion mode. Falls back to the saved
+  // pre-zen motion on exit, just like the corner-× and Esc.
+  if (e.key === 'z' || e.key === 'Z') {
+    if (state.motionMode === 'zen') {
+      exitZenMode();
+    } else {
+      applyMotionMode('zen');
+      updateResetVisibility();
+      render();
+    }
+    e.preventDefault();
+    return;
+  }
+
   const k = e.key.toUpperCase();
   if (k.length === 1 && state.alphabet.includes(k)) {
     inputDigit(k);
