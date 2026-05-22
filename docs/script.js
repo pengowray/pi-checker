@@ -1997,8 +1997,18 @@ function updateUI() {
 
   // Practice-lookahead setting is practice-only.
   if (practiceLookaheadSetting) practiceLookaheadSetting.hidden = state.mode !== 'practice';
-  // Bullet-timing setting is bullet-only.
-  if (bulletSettingsEl) bulletSettingsEl.hidden = state.mode !== 'bullet';
+  // Bullet-timing setting is bullet-only. Lock the three inputs the
+  // moment the run starts (or is game-over) so the player can't
+  // retroactively change start/bonus/penalty mid-run; Reset is required
+  // to tweak them.
+  if (bulletSettingsEl) {
+    bulletSettingsEl.hidden = state.mode !== 'bullet';
+    const bulletLocked = state.mode === 'bullet' && state.startTime !== null;
+    [bulletStartInput, bulletBonusInput, bulletPenaltyInput].forEach(input => {
+      if (input) input.disabled = bulletLocked;
+    });
+    bulletSettingsEl.classList.toggle('locked', bulletLocked);
+  }
 
   // Zen reveals the stats only on pause or game-over.
   document.documentElement.classList.toggle('zen-reveal',

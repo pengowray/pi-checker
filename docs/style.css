@@ -797,6 +797,20 @@ input[type="range"]:disabled {
 .bullet-field input[type="number"]:focus { outline: none; }
 .bullet-suffix { opacity: 0.7; }
 
+/* Run in progress — fields read-only. Show the lock icon on the section
+   so the player knows why the controls don't respond. */
+#bullet-settings.locked .bullet-field {
+  opacity: 0.55;
+}
+#bullet-settings.locked .bullet-field input[type="number"] {
+  cursor: not-allowed;
+}
+#bullet-settings.locked .setting-label::after {
+  content: " \1F512";
+  font-size: 0.85em;
+  opacity: 0.7;
+}
+
 /* Bullet score modal: tighter card, grid of stats with right-aligned
    numbers in a tabular monospaced figure. */
 .bullet-score-card {
