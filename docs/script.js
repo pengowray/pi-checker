@@ -244,9 +244,10 @@ deriveTau();
 
 // ---- Constants ----
 // Competitive uses per-digit auto-check at COMPETITIVE_PER_DIGIT_SECONDS
-// (defined below). Hardcore is instant (0). Kept as a single literal so
-// MODE_FIXED_DELAY can sit at the top of the constants block.
-const MODE_FIXED_DELAY = { competitive: 30, hardcore: 0 };
+// (defined below). Hardcore and Bullet are instant (0) — bullet's
+// scoring needs the digit's correct/wrong status resolved immediately
+// so the budget reflects each keystroke.
+const MODE_FIXED_DELAY = { competitive: 30, hardcore: 0, bullet: 0 };
 const DEFAULT_PRACTICE_DELAY = 2;
 const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
@@ -264,6 +265,9 @@ const STORAGE_KEYS = {
   preZenMotion: 'pi-pre-zen-motion',
   hideKeypad: 'pi-hide-keypad',
   practiceLookahead: 'pi-practice-lookahead',
+  bulletStart: 'pi-bullet-start',
+  bulletBonus: 'pi-bullet-bonus',
+  bulletPenalty: 'pi-bullet-penalty',
 };
 
 const DEFAULT_KEYPAD_FLIP = false;
@@ -288,6 +292,10 @@ const COMPETITIVE_LOOKAHEAD = 10;
 // Practice-mode lookahead default: 0 disables the lookahead-based
 // auto-check (the per-digit / on-idle timer is the only trigger).
 const DEFAULT_PRACTICE_LOOKAHEAD = 0;
+// Bullet defaults: 60s starting bank, +5s per correct, -30s per wrong.
+const DEFAULT_BULLET_START = 60;
+const DEFAULT_BULLET_BONUS = 5;
+const DEFAULT_BULLET_PENALTY = 30;
 
 const state = {
   sequenceId: 'pi',
@@ -329,6 +337,13 @@ const state = {
   // checks once N newer pending entries have stacked behind it. Combines
   // with per-digit / on-idle / manual — whichever fires first wins.
   practiceLookahead: DEFAULT_PRACTICE_LOOKAHEAD,
+  // Bullet mode: chess-clock style countdown with bonus/penalty.
+  bulletStartSeconds: DEFAULT_BULLET_START,
+  bulletBonusSeconds: DEFAULT_BULLET_BONUS,
+  bulletPenaltySeconds: DEFAULT_BULLET_PENALTY,
+  bulletBudget: DEFAULT_BULLET_START, // current time bank
+  bulletGameOver: false,
+  bulletFrozenAt: 0, // elapsed seconds at game over
 };
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
@@ -381,6 +396,12 @@ const practiceLookaheadSetting = document.getElementById('practice-lookahead-set
 const cursorEl = document.getElementById('cursor');
 const zenExitBtn = document.getElementById('zen-exit');
 const mobileInputEl = document.getElementById('mobile-input');
+const bulletSettingsEl = document.getElementById('bullet-settings');
+const bulletStartInput = document.getElementById('bullet-start');
+const bulletBonusInput = document.getElementById('bullet-bonus');
+const bulletPenaltyInput = document.getElementById('bullet-penalty');
+const correctTile = document.getElementById('stat-correct-tile');
+const bulletScoreModal = document.getElementById('bullet-score-modal');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -469,6 +490,33 @@ hideKeypadInputs.forEach(input => {
     // the next render (e.g. the user typing a digit).
     updateUI();
   });
+});
+
+// ---- Bullet timing settings ----
+function applyBulletInputs(persist = true) {
+  const s = parseInt(bulletStartInput.value, 10);
+  const b = parseInt(bulletBonusInput.value, 10);
+  const p = parseInt(bulletPenaltyInput.value, 10);
+  if (!isNaN(s) && s >= 5 && s <= 3600) state.bulletStartSeconds = s;
+  if (!isNaN(b) && b >= 0 && b <= 60) state.bulletBonusSeconds = b;
+  if (!isNaN(p) && p >= 0 && p <= 120) state.bulletPenaltySeconds = p;
+  if (persist) {
+    localStorage.setItem(STORAGE_KEYS.bulletStart, String(state.bulletStartSeconds));
+    localStorage.setItem(STORAGE_KEYS.bulletBonus, String(state.bulletBonusSeconds));
+    localStorage.setItem(STORAGE_KEYS.bulletPenalty, String(state.bulletPenaltySeconds));
+  }
+  // Reflect the new start into the live budget when the player hasn't
+  // begun typing yet — otherwise mid-run changes would feel cheaty.
+  if (state.mode === 'bullet' && state.startTime === null) {
+    state.bulletBudget = state.bulletStartSeconds;
+  }
+  updateModeHint();
+  updateModeBadge();
+  updateResetVisibility();
+}
+[bulletStartInput, bulletBonusInput, bulletPenaltyInput].forEach(input => {
+  if (!input) return;
+  input.addEventListener('input', () => applyBulletInputs(true));
 });
 
 // ---- Practice lookahead slider ----
@@ -699,8 +747,8 @@ modeInputs.forEach(input => {
 function attemptModeChange(newMode) {
   if (newMode === state.mode) return true;
 
-  // Hardcore and Competitive always start from a fresh session.
-  if (newMode === 'competitive' || newMode === 'hardcore') {
+  // Hardcore, Competitive, and Bullet always start from a fresh session.
+  if (newMode === 'competitive' || newMode === 'hardcore' || newMode === 'bullet') {
     if (state.entries.length > 0) {
       const ok = confirm('This will reset your current progress. Start a new ' + newMode + ' session?');
       if (!ok) return false;
@@ -733,6 +781,13 @@ function attemptModeChange(newMode) {
     state.hardcoreFailed = false;
   }
 
+  if (state.mode === 'bullet' && newMode !== 'bullet') {
+    if (state.bulletGameOver && state.startTime !== null) {
+      state.startTime = performance.now() - state.bulletFrozenAt * 1000;
+    }
+    state.bulletGameOver = false;
+  }
+
   state.mode = newMode;
   applyModeDefaults();
   return true;
@@ -759,6 +814,9 @@ function clearSession() {
   state.correctedPositions.clear();
   state.integerCharsConsumed = 0;
   state.compTimerHidden = false;
+  state.bulletBudget = state.bulletStartSeconds;
+  state.bulletGameOver = false;
+  state.bulletFrozenAt = 0;
 }
 
 function applyModeDefaults() {
@@ -782,8 +840,13 @@ function updateModeBadge() {
   let delayText;
   if (state.mode === 'competitive' && state.competitiveEnded) delayText = 'ended';
   else if (state.mode === 'hardcore' && state.hardcoreFailed) delayText = 'failed';
+  else if (state.mode === 'bullet' && state.bulletGameOver) delayText = 'time out';
   else if (state.mode === 'competitive') {
     delayText = COMPETITIVE_PER_DIGIT_SECONDS + 's/digit, +' + COMPETITIVE_LOOKAHEAD;
+  }
+  else if (state.mode === 'bullet') {
+    delayText = state.bulletStartSeconds + 's start, +' + state.bulletBonusSeconds +
+      '/−' + state.bulletPenaltySeconds;
   }
   else if (isManual()) delayText = 'manual';
   else if (state.autoCheckSeconds === 0) delayText = 'instant';
@@ -810,6 +873,9 @@ function updateModeHint() {
     competitive: COMPETITIVE_PER_DIGIT_SECONDS + 's per-digit auto-check (or after ' +
       COMPETITIVE_LOOKAHEAD + ' more digits, whichever first), 15 minute limit, wrong digits stay locked. Reset is required to start.',
     hardcore: 'Instant lock-in, no backspace. One wrong digit ends the run. Reset is required to start.',
+    bullet: 'Chess-clock: start with ' + state.bulletStartSeconds + 's; +' +
+      state.bulletBonusSeconds + 's per correct, −' + state.bulletPenaltySeconds +
+      's per wrong (refunded if rescored). Backspace fixes errors but does not refund time. Reach 0 to end.',
   };
   modeHint.textContent = hints[state.mode] || '';
 }
@@ -817,6 +883,7 @@ function updateModeHint() {
 function isInputLocked() {
   if (state.competitiveEnded && state.mode === 'competitive') return true;
   if (state.hardcoreFailed && state.mode === 'hardcore') return true;
+  if (state.bulletGameOver && state.mode === 'bullet') return true;
   return false;
 }
 
@@ -863,6 +930,54 @@ function endHardcore() {
   render();
 }
 
+// ---- Bullet mode lifecycle ----
+// Per-entry scoring flags: bulletPenalized / bulletBonused / bulletRefunded.
+// Each entry can be penalized at most once for being wrong, and bonused at
+// most once for being correct. If a previously-penalized entry transitions
+// to correct (missed-detection re-scores it), the penalty is refunded once
+// AND a bonus is applied — net +penalty+bonus, matching the spec's "+35s".
+function applyBulletScoring() {
+  if (state.mode !== 'bullet') return;
+  if (state.bulletGameOver) return;
+  for (const e of state.entries) {
+    if (!e.checked) continue;
+    // Fixed (retyped after backspace) and skipped entries don't change time.
+    if (e.skipped || e.corrected) continue;
+    if (e.status === 'wrong') {
+      if (!e.bulletPenalized) {
+        state.bulletBudget -= state.bulletPenaltySeconds;
+        e.bulletPenalized = true;
+      }
+    } else if (e.status === 'correct') {
+      if (e.bulletPenalized && !e.bulletRefunded) {
+        state.bulletBudget += state.bulletPenaltySeconds;
+        e.bulletRefunded = true;
+      }
+      if (!e.bulletBonused) {
+        state.bulletBudget += state.bulletBonusSeconds;
+        e.bulletBonused = true;
+      }
+    }
+  }
+}
+
+function endBullet() {
+  if (state.mode !== 'bullet' || state.bulletGameOver) return;
+  state.bulletGameOver = true;
+  state.bulletFrozenAt = state.startTime === null ? 0
+    : (performance.now() - state.startTime) / 1000;
+  if (state.autoCheckTimer) {
+    clearTimeout(state.autoCheckTimer);
+    state.autoCheckTimer = null;
+  }
+  cancelAllPerDigitTimers();
+  stopCheckBar();
+  markAllChecked();
+  applyBulletScoring();
+  openBulletScoreModal();
+  render();
+}
+
 function practicePause() {
   if (state.mode !== 'practice') return;
   if (state.startTime === null || state.practicePaused) return;
@@ -883,6 +998,11 @@ function continueInPractice() {
     }
     state.competitiveEnded = false;
     state.gameLocked = false;
+  } else if (state.mode === 'bullet' && state.bulletGameOver) {
+    if (state.startTime !== null) {
+      state.startTime = performance.now() - state.bulletFrozenAt * 1000;
+    }
+    state.bulletGameOver = false;
   } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
     if (state.startTime !== null) {
       state.startTime = performance.now() - state.hardcoreFrozenAt * 1000;
@@ -950,7 +1070,9 @@ function inputDigit(d) {
     schedulePerDigitTimer(entry);
   }
   checkLookaheadAutoCheck();
+  applyBulletScoring();
   checkHardcoreFail();
+  checkBulletGameOver();
   render();
 }
 
@@ -1015,7 +1137,9 @@ function inputPaste(text) {
   }
 
   computeStatuses(firstNewIdx);
+  applyBulletScoring();
   checkHardcoreFail();
+  checkBulletGameOver();
   render();
 }
 
@@ -1079,6 +1203,7 @@ function backspace() {
   } else {
     syncCheckBarPerDigit();
   }
+  applyBulletScoring();
   render();
 }
 
@@ -1130,6 +1255,20 @@ function checkLookaheadAutoCheck() {
     e.autoCheckStartedAt = null;
     e.checked = true;
     pendingCount--;
+  }
+  applyBulletScoring();
+}
+
+// Bullet game-over check: budget − elapsed ≤ 0 ends the run. Called
+// from the input pipelines and from tickTime so a long pause without
+// typing still triggers game-over.
+function checkBulletGameOver() {
+  if (state.mode !== 'bullet') return;
+  if (state.bulletGameOver) return;
+  if (state.startTime === null) return;
+  const elapsed = (performance.now() - state.startTime) / 1000;
+  if (state.bulletBudget - elapsed <= 0) {
+    endBullet();
   }
 }
 
@@ -1710,8 +1849,8 @@ function tickTime() {
     }
   }
 
-  // Big countdown (competitive only, high motion only — in medium/low it
-  // lives in the bottom-right stat-time slot instead).
+  // Big countdown (competitive in high motion, or bullet at any motion).
+  // Competitive in medium/low folds into the bottom-right stat-time slot.
   if (state.mode === 'competitive' && !showCompTimerInline()) {
     let remaining;
     if (state.startTime === null) {
@@ -1726,6 +1865,24 @@ function tickTime() {
     compTimerEl.classList.toggle('ended', state.competitiveEnded);
     compTimerEl.classList.toggle('danger', !state.competitiveEnded && remaining <= 10 && state.gameLocked);
     compTimerEl.classList.toggle('warning', !state.competitiveEnded && remaining > 10 && remaining <= 60 && state.gameLocked);
+  } else if (state.mode === 'bullet') {
+    let remaining;
+    if (state.startTime === null) {
+      remaining = state.bulletStartSeconds;
+    } else if (state.bulletGameOver) {
+      remaining = Math.max(0, state.bulletBudget - state.bulletFrozenAt);
+    } else {
+      const e = (performance.now() - state.startTime) / 1000;
+      remaining = state.bulletBudget - e;
+      if (remaining <= 0) {
+        endBullet();
+        remaining = 0;
+      }
+    }
+    compTimerEl.textContent = formatTime(Math.max(0, remaining));
+    compTimerEl.classList.toggle('ended', state.bulletGameOver);
+    compTimerEl.classList.toggle('danger', !state.bulletGameOver && remaining <= 10);
+    compTimerEl.classList.toggle('warning', !state.bulletGameOver && remaining > 10 && remaining <= 30);
   }
 }
 setInterval(tickTime, 250);
@@ -1738,7 +1895,9 @@ function updateUI() {
   const hardcoreActive = state.mode === 'hardcore' && state.startTime !== null && !state.hardcoreFailed;
   const practiceActive = state.mode === 'practice' && state.startTime !== null && !state.practicePaused;
   const gameOver = (state.mode === 'competitive' && state.competitiveEnded) ||
-                   (state.mode === 'hardcore' && state.hardcoreFailed);
+                   (state.mode === 'hardcore' && state.hardcoreFailed) ||
+                   (state.mode === 'bullet' && state.bulletGameOver);
+  const bulletActive = state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver;
 
   // Keep the settings panel's mode radio in sync with state.mode in case
   // state was changed programmatically (Continue button, etc.)
@@ -1770,8 +1929,8 @@ function updateUI() {
   const checkDisabled = inputLocked || !hasPending() || state.mode === 'competitive';
   allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
-  // Stop button: ends in comp/hardcore, pseudo-pauses in practice
-  stopBtn.hidden = !(compActive || hardcoreActive || practiceActive);
+  // Stop button: ends in comp/hardcore/bullet, pseudo-pauses in practice
+  stopBtn.hidden = !(compActive || hardcoreActive || practiceActive || bulletActive);
   stopBtn.textContent = state.mode === 'practice' ? 'Pause' : 'Stop';
   // Practice-mode Pause is a quiet courtesy button — toned-down border
   // and colour. Comp/hardcore Stop keeps the alert-red border.
@@ -1783,10 +1942,14 @@ function updateUI() {
   // the prominent button and demote Continue.
   resetBtn.classList.toggle('primary', gameOver);
   continueBtn.classList.toggle('secondary', gameOver);
-  // Big top timer is only used in high motion mode. Medium/low fold the
-  // countdown into the bottom-right stat-time slot.
-  compTimerEl.hidden = state.mode !== 'competitive' || showCompTimerInline();
-  compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded);
+  // Big top timer is used in competitive (high motion only) and bullet
+  // (any motion — the countdown is core gameplay). Medium/low competitive
+  // folds into the bottom-right stat-time slot.
+  const showCompTimer = (state.mode === 'competitive' && !showCompTimerInline()) ||
+                        state.mode === 'bullet';
+  compTimerEl.hidden = !showCompTimer;
+  compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded && !state.bulletGameOver);
+  compTimerEl.classList.toggle('bullet', state.mode === 'bullet');
 
   // Click-to-dim elapsed/countdown clock. Also force-dimmed by default in
   // low-motion practice (the user can click to reveal).
@@ -1803,6 +1966,8 @@ function updateUI() {
 
   // Practice-lookahead setting is practice-only.
   if (practiceLookaheadSetting) practiceLookaheadSetting.hidden = state.mode !== 'practice';
+  // Bullet-timing setting is bullet-only.
+  if (bulletSettingsEl) bulletSettingsEl.hidden = state.mode !== 'bullet';
 
   // Zen reveals the stats only on pause or game-over.
   document.documentElement.classList.toggle('zen-reveal',
@@ -1839,6 +2004,7 @@ resetBtn.addEventListener('click', reset);
 stopBtn.addEventListener('click', () => {
   if (state.mode === 'competitive') endCompetitive();
   else if (state.mode === 'hardcore') endHardcore();
+  else if (state.mode === 'bullet') endBullet();
   else if (state.mode === 'practice') practicePause();
 });
 continueBtn.addEventListener('click', () => continueInPractice());
@@ -1896,6 +2062,14 @@ document.addEventListener('keydown', (e) => {
   if (!missedModal.hidden) {
     if (e.key === 'Escape') {
       closeMissedModal();
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (bulletScoreModal && !bulletScoreModal.hidden) {
+    if (e.key === 'Escape') {
+      closeBulletScoreModal();
       e.preventDefault();
     }
     return;
@@ -2058,6 +2232,12 @@ resetBtns.forEach(btn => {
       updateResetVisibility();
       checkLookaheadAutoCheck();
       render();
+    } else if (target === 'bullet') {
+      bulletStartInput.value = String(DEFAULT_BULLET_START);
+      bulletBonusInput.value = String(DEFAULT_BULLET_BONUS);
+      bulletPenaltyInput.value = String(DEFAULT_BULLET_PENALTY);
+      applyBulletInputs(true);
+      render();
     }
   });
 });
@@ -2075,6 +2255,9 @@ function updateResetVisibility() {
     else if (target === 'motion-mode') isDefault = state.motionMode === defaultMotionMode();
     else if (target === 'hide-keypad') isDefault = state.hideKeypad === false;
     else if (target === 'practice-lookahead') isDefault = state.practiceLookahead === DEFAULT_PRACTICE_LOOKAHEAD;
+    else if (target === 'bullet') isDefault = state.bulletStartSeconds === DEFAULT_BULLET_START
+      && state.bulletBonusSeconds === DEFAULT_BULLET_BONUS
+      && state.bulletPenaltySeconds === DEFAULT_BULLET_PENALTY;
     btn.hidden = isDefault;
   });
 }
@@ -2176,6 +2359,67 @@ missedModal.addEventListener('click', (e) => {
   if (e.target && e.target.hasAttribute('data-close')) closeMissedModal();
 });
 
+// ---- Bullet score modal ----
+function openBulletScoreModal() {
+  if (!bulletScoreModal) return;
+  // Recompute the stats from current entries so the dialog reflects the
+  // very latest state (in case applyBulletScoring just ran).
+  let correct = 0, wrong = 0, missed = 0, fixed = 0, refunded = 0;
+  for (const e of state.entries) {
+    if (!e.checked) continue;
+    missed += e.missedBefore.length;
+    if (e.status === 'correct') {
+      if (e.skipped) { /* skipped: don't count */ }
+      else if (e.corrected) fixed += 1;
+      else correct += 1;
+    } else if (e.status === 'wrong') {
+      wrong += 1;
+    }
+    if (e.bulletRefunded) refunded += 1;
+  }
+  const pos = state.nextSeqIdx || 0;
+  const seqLabel = (SEQUENCES[state.sequenceId] && SEQUENCES[state.sequenceId].shortLabel) || state.sequenceId;
+  document.getElementById('bullet-score-headline').textContent =
+    state.bulletGameOver
+      ? 'Time out at digit ' + pos + ' of ' + seqLabel + '.'
+      : 'Run so far — digit ' + pos + ' of ' + seqLabel + '.';
+  document.getElementById('bullet-score-correct').textContent = correct;
+  document.getElementById('bullet-score-wrong').textContent = wrong;
+  document.getElementById('bullet-score-fixed').textContent = fixed;
+  document.getElementById('bullet-score-missed').textContent = missed;
+  document.getElementById('bullet-score-refunded').textContent = refunded;
+  document.getElementById('bullet-score-time').textContent =
+    formatTime(state.bulletGameOver ? state.bulletFrozenAt :
+      (state.startTime === null ? 0 : (performance.now() - state.startTime) / 1000));
+  bulletScoreModal.hidden = false;
+  bulletScoreModal.setAttribute('aria-hidden', 'false');
+}
+function closeBulletScoreModal() {
+  if (!bulletScoreModal) return;
+  bulletScoreModal.hidden = true;
+  bulletScoreModal.setAttribute('aria-hidden', 'true');
+}
+if (bulletScoreModal) {
+  bulletScoreModal.addEventListener('click', (e) => {
+    if (e.target && e.target.hasAttribute('data-close')) closeBulletScoreModal();
+  });
+}
+
+// Clicking the Correct tile re-opens the bullet score modal after a
+// bullet run. (Reserved as a hook for a general per-mode stats modal
+// in future.)
+if (correctTile) {
+  correctTile.addEventListener('click', () => {
+    if (state.mode === 'bullet') openBulletScoreModal();
+  });
+  correctTile.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (state.mode === 'bullet') openBulletScoreModal();
+    }
+  });
+}
+
 // ---- Async load of long sequence data ----
 // Each sequence with a reliable longer source has its own file in
 // docs/long/<id>.js. The files set window.LONG_DIGITS[id] (kept lazy so
@@ -2275,6 +2519,23 @@ function loadPersistedSettings() {
     practiceLookaheadInput.value = String(savedLookahead);
   }
   renderLookaheadLabel();
+  // Bullet timing.
+  const bs = parseInt(localStorage.getItem(STORAGE_KEYS.bulletStart), 10);
+  const bb = parseInt(localStorage.getItem(STORAGE_KEYS.bulletBonus), 10);
+  const bp = parseInt(localStorage.getItem(STORAGE_KEYS.bulletPenalty), 10);
+  if (!isNaN(bs) && bs >= 5 && bs <= 3600) {
+    state.bulletStartSeconds = bs;
+    state.bulletBudget = bs;
+    bulletStartInput.value = String(bs);
+  }
+  if (!isNaN(bb) && bb >= 0 && bb <= 60) {
+    state.bulletBonusSeconds = bb;
+    bulletBonusInput.value = String(bb);
+  }
+  if (!isNaN(bp) && bp >= 0 && bp <= 120) {
+    state.bulletPenaltySeconds = bp;
+    bulletPenaltyInput.value = String(bp);
+  }
 }
 
 // ---- Init ----
