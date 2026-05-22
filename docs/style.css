@@ -619,7 +619,6 @@ input[type="range"]:disabled {
 /* Hide the surrounding chrome. The pi-display, cursor, and keypad
    (unless the user separately hid it) remain. */
 :root[data-motion="zen"] header,
-:root[data-motion="zen"] .foot,
 :root[data-motion="zen"] .mode-badge,
 :root[data-motion="zen"] .comp-timer,
 :root[data-motion="zen"] .actions,
@@ -1299,21 +1298,6 @@ input[type="range"]:disabled {
 }
 #continue-btn.secondary:hover { background: var(--key-hover); filter: none; }
 
-.foot {
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--muted);
-  padding: 1rem 0 2rem;
-}
-
-.foot kbd {
-  background: var(--key-bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.8em;
-  font-family: inherit;
-}
 
 @media (max-width: 480px) {
   main { padding: 0.7rem; }
@@ -1331,8 +1315,8 @@ input[type="range"]:disabled {
 }
 
 /* Tight vertical viewports (zoomed-in desktop, short windows): trim the
-   header, footer, and section gaps so the pi display keeps at least two
-   or three lines before squishing. Covers the range above the landscape
+   header and section gaps so the pi display keeps at least two or three
+   lines before squishing. Covers the range above the landscape
    breakpoint where the standard layout otherwise starves the display. */
 @media (max-height: 820px) {
   header { padding: 0.55rem 1.2rem; }
@@ -1343,7 +1327,6 @@ input[type="range"]:disabled {
   .stats { margin-bottom: 0.55rem; }
   .keypad { margin-bottom: 0.55rem; }
   .actions { margin-bottom: 0.45rem; }
-  .foot { padding: 0.35rem 0 0.5rem; font-size: 0.75rem; }
 }
 
 @media (max-height: 720px) {
@@ -1354,13 +1337,12 @@ input[type="range"]:disabled {
   .keypad-hint { margin-bottom: 0.25rem; font-size: 0.78rem; }
   .keypad { gap: 0.4rem; margin-bottom: 0.45rem; }
   .key { min-height: 52px; padding: 0.6rem 0; font-size: 1.4rem; }
-  .foot { display: none; }
 }
 
 /* Landscape on short viewports (mobile rotated, small windows): keypad
    moves to the right column, everything else stacks in the left column;
-   actions span the full width below. The footer hint and the header
-   subtitle are hidden to reclaim vertical room. */
+   actions span the full width below. The header subtitle is hidden to
+   reclaim vertical room. */
 @media (orientation: landscape) and (max-height: 700px) {
   header { padding: 0.4rem 0.9rem; }
   header h1 { font-size: 1.1rem; letter-spacing: 0.3px; }
@@ -1396,7 +1378,6 @@ input[type="range"]:disabled {
   .stats { grid-area: stats; gap: 0.25rem; }
   .stats > div { padding: 0.3rem 0.25rem; border-radius: 8px; }
   .actions { grid-area: actions; margin-bottom: 0; gap: 0.4rem; }
-  .foot { display: none; }
 
   .keypad-decimal, .keypad-hex {
     grid-area: keypad;
