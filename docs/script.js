@@ -1813,16 +1813,41 @@ function formatTime(seconds) {
   return Math.floor(total / 60) + ':' + pad(s);
 }
 
-// In medium/low motion the competitive countdown moves to the bottom-right
-// stat-time slot (replacing the elapsed clock), so the big top timer hides.
+// In medium/low motion the countdown for competitive AND bullet folds
+// into the bottom-right stat-time slot (replacing the elapsed clock),
+// so the big top timer hides. High motion keeps the big top timer.
 function showCompTimerInline() {
-  return state.mode === 'competitive' && state.motionMode !== 'high';
+  if (state.motionMode === 'high') return false;
+  return state.mode === 'competitive' || state.mode === 'bullet';
+}
+
+// Returns the countdown remaining in seconds for competitive / bullet,
+// or null for other modes. Handles the not-yet-started, frozen-at-end,
+// and live cases, and triggers endBullet when the bullet budget hits 0.
+function getModeRemaining(elapsed) {
+  if (state.mode === 'competitive') {
+    if (state.startTime === null) return COMPETITIVE_LIMIT_SECONDS;
+    if (state.competitiveEnded) return Math.max(0, COMPETITIVE_LIMIT_SECONDS - state.competitiveFrozenAt);
+    return Math.max(0, COMPETITIVE_LIMIT_SECONDS - elapsed);
+  }
+  if (state.mode === 'bullet') {
+    if (state.startTime === null) return state.bulletStartSeconds;
+    if (state.bulletGameOver) return Math.max(0, state.bulletBudget - state.bulletFrozenAt);
+    let remaining = state.bulletBudget - elapsed;
+    if (remaining <= 0) {
+      endBullet();
+      remaining = 0;
+    }
+    return remaining;
+  }
+  return null;
 }
 
 function tickTime() {
   if (state.startTime === null) {
     if (showCompTimerInline()) {
-      statTime.textContent = formatTime(COMPETITIVE_LIMIT_SECONDS) + ' remaining';
+      const remaining = getModeRemaining(0);
+      statTime.textContent = formatTime(remaining) + ' remaining';
       statTime.classList.add('countdown');
     } else {
       statTime.textContent = '0:00 elapsed';
@@ -1842,6 +1867,8 @@ function tickTime() {
       elapsed = state.competitiveFrozenAt;
     } else if (state.hardcoreFailed && state.mode === 'hardcore') {
       elapsed = state.hardcoreFrozenAt;
+    } else if (state.bulletGameOver && state.mode === 'bullet') {
+      elapsed = state.bulletFrozenAt;
     } else if (state.practicePaused && state.mode === 'practice') {
       elapsed = state.practicePauseDisplayedAt;
     } else {
@@ -1850,16 +1877,23 @@ function tickTime() {
 
     statTime.classList.toggle('paused', state.mode === 'practice' && state.practicePaused);
 
+    const ended = state.competitiveEnded || state.bulletGameOver;
     if (showCompTimerInline()) {
-      const remaining = Math.max(0, COMPETITIVE_LIMIT_SECONDS - elapsed);
-      statTime.textContent = formatTime(remaining) + ' remaining';
+      const remaining = getModeRemaining(elapsed);
+      statTime.textContent = formatTime(Math.max(0, remaining)) + ' remaining';
       statTime.classList.add('countdown');
-      statTime.classList.toggle('frozen', state.competitiveEnded);
+      statTime.classList.toggle('frozen', ended);
     } else if (state.mode === 'competitive') {
       const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
       statTime.textContent = formatTime(capped) + ' elapsed';
       statTime.classList.remove('countdown');
       statTime.classList.toggle('frozen', state.competitiveEnded);
+    } else if (state.mode === 'bullet') {
+      // High motion: stat-time keeps elapsed (the big top timer shows the
+      // countdown). Mirrors what competitive does in high motion.
+      statTime.textContent = formatTime(elapsed) + ' elapsed';
+      statTime.classList.remove('countdown');
+      statTime.classList.toggle('frozen', state.bulletGameOver);
     } else if (state.mode === 'hardcore' && state.hardcoreFailed) {
       statTime.textContent = formatTime(elapsed) + ' elapsed';
       statTime.classList.remove('countdown');
@@ -1871,36 +1905,20 @@ function tickTime() {
     }
   }
 
-  // Big countdown (competitive in high motion, or bullet at any motion).
-  // Competitive in medium/low folds into the bottom-right stat-time slot.
+  // Big top countdown — only used in high motion (medium/low fold into
+  // the bottom-right stat-time slot via showCompTimerInline).
   if (state.mode === 'competitive' && !showCompTimerInline()) {
-    let remaining;
-    if (state.startTime === null) {
-      remaining = COMPETITIVE_LIMIT_SECONDS;
-    } else if (state.competitiveEnded) {
-      remaining = Math.max(0, COMPETITIVE_LIMIT_SECONDS - state.competitiveFrozenAt);
-    } else {
-      const e = (performance.now() - state.startTime) / 1000;
-      remaining = Math.max(0, COMPETITIVE_LIMIT_SECONDS - e);
-    }
+    const elapsed = state.startTime === null ? 0
+      : (state.competitiveEnded ? state.competitiveFrozenAt : (performance.now() - state.startTime) / 1000);
+    const remaining = getModeRemaining(elapsed);
     compTimerEl.textContent = formatTime(remaining);
     compTimerEl.classList.toggle('ended', state.competitiveEnded);
     compTimerEl.classList.toggle('danger', !state.competitiveEnded && remaining <= 10 && state.gameLocked);
     compTimerEl.classList.toggle('warning', !state.competitiveEnded && remaining > 10 && remaining <= 60 && state.gameLocked);
-  } else if (state.mode === 'bullet') {
-    let remaining;
-    if (state.startTime === null) {
-      remaining = state.bulletStartSeconds;
-    } else if (state.bulletGameOver) {
-      remaining = Math.max(0, state.bulletBudget - state.bulletFrozenAt);
-    } else {
-      const e = (performance.now() - state.startTime) / 1000;
-      remaining = state.bulletBudget - e;
-      if (remaining <= 0) {
-        endBullet();
-        remaining = 0;
-      }
-    }
+  } else if (state.mode === 'bullet' && !showCompTimerInline()) {
+    const elapsed = state.startTime === null ? 0
+      : (state.bulletGameOver ? state.bulletFrozenAt : (performance.now() - state.startTime) / 1000);
+    const remaining = getModeRemaining(elapsed);
     compTimerEl.textContent = formatTime(Math.max(0, remaining));
     compTimerEl.classList.toggle('ended', state.bulletGameOver);
     compTimerEl.classList.toggle('danger', !state.bulletGameOver && remaining <= 10);
@@ -1964,11 +1982,11 @@ function updateUI() {
   // the prominent button and demote Continue.
   resetBtn.classList.toggle('primary', gameOver);
   continueBtn.classList.toggle('secondary', gameOver);
-  // Big top timer is used in competitive (high motion only) and bullet
-  // (any motion — the countdown is core gameplay). Medium/low competitive
-  // folds into the bottom-right stat-time slot.
-  const showCompTimer = (state.mode === 'competitive' && !showCompTimerInline()) ||
-                        state.mode === 'bullet';
+  // Big top timer is used in competitive AND bullet, but only in high
+  // motion. Medium/low fold the countdown into the bottom-right
+  // stat-time slot via showCompTimerInline().
+  const showCompTimer = (state.mode === 'competitive' || state.mode === 'bullet') &&
+                        !showCompTimerInline();
   compTimerEl.hidden = !showCompTimer;
   compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded && !state.bulletGameOver);
   compTimerEl.classList.toggle('bullet', state.mode === 'bullet');
@@ -2032,8 +2050,8 @@ stopBtn.addEventListener('click', () => {
 continueBtn.addEventListener('click', () => continueInPractice());
 
 function toggleCompTimer() {
-  if (state.mode !== 'competitive') return;
-  if (state.competitiveEnded) return; // ended state always visible
+  if (state.mode !== 'competitive' && state.mode !== 'bullet') return;
+  if (state.competitiveEnded || state.bulletGameOver) return; // ended state always visible
   state.compTimerHidden = !state.compTimerHidden;
   updateUI();
 }
