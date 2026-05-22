@@ -488,7 +488,7 @@ input[type="range"]:disabled {
   opacity: 0.85;
 }
 
-/* Diff view shown after a competitive session ends: typed digit struck
+/* Diff view shown after a sprint session ends: typed digit struck
    through with the correct pi digit floating above it. */
 .pi-display.diff-mode {
   line-height: 2.2;
@@ -842,7 +842,7 @@ input[type="range"]:disabled {
 }
 
 /* Bullet uses the comp-timer styling but coloured-as-accent at calm
-   levels so it visually distinguishes from the competitive countdown. */
+   levels so it visually distinguishes from the sprint countdown. */
 .comp-timer.bullet { color: var(--accent); }
 .comp-timer.bullet.warning { color: var(--missed); }
 .comp-timer.bullet.danger { color: var(--wrong); }
@@ -1248,7 +1248,7 @@ input[type="range"]:disabled {
 .stat-time.dimmed { opacity: 0.18; }
 .stat-time.dimmed:hover { opacity: 0.5; }
 
-/* Competitive countdown folded into the stat-time slot (medium/low). Use
+/* Sprint countdown folded into the stat-time slot (medium/low). Use
    the same monospace face as the big comp-timer but at the stat-time
    font size, prefixed with the outline hourglass. */
 .stat-time.countdown {

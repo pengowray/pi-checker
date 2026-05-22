@@ -243,16 +243,16 @@ deriveTau();
 })();
 
 // ---- Constants ----
-// Competitive uses per-digit auto-check at COMPETITIVE_PER_DIGIT_SECONDS
+// Sprint uses per-digit auto-check at SPRINT_PER_DIGIT_SECONDS
 // (defined below). Hardcore and Bullet are instant (0) — bullet's
 // scoring needs the digit's correct/wrong status resolved immediately
 // so the budget reflects each keystroke.
-const MODE_FIXED_DELAY = { competitive: 30, hardcore: 0, bullet: 0 };
+const MODE_FIXED_DELAY = { sprint: 30, hardcore: 0, bullet: 0 };
 const DEFAULT_PRACTICE_DELAY = 2;
 const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
-const COMPETITIVE_LIMIT_SECONDS = 15 * 60;
+const SPRINT_LIMIT_SECONDS = 15 * 60;
 
 const STORAGE_KEYS = {
   theme: 'pi-theme',
@@ -284,11 +284,11 @@ function defaultMotionMode() {
   } catch (e) { /* matchMedia missing — fall through */ }
   return 'medium';
 }
-// Competitive mode: each digit auto-checks after this many seconds, OR
-// when COMPETITIVE_LOOKAHEAD newer digits stack up behind it (whichever
-// fires first). Keep this in sync with MODE_FIXED_DELAY.competitive.
-const COMPETITIVE_PER_DIGIT_SECONDS = 30;
-const COMPETITIVE_LOOKAHEAD = 10;
+// Sprint mode: each digit auto-checks after this many seconds, OR
+// when SPRINT_LOOKAHEAD newer digits stack up behind it (whichever
+// fires first). Keep this in sync with MODE_FIXED_DELAY.sprint.
+const SPRINT_PER_DIGIT_SECONDS = 30;
+const SPRINT_LOOKAHEAD = 10;
 // Practice-mode lookahead default: 0 disables the lookahead-based
 // auto-check (the per-digit / on-idle timer is the only trigger).
 const DEFAULT_PRACTICE_LOOKAHEAD = 0;
@@ -312,8 +312,8 @@ const state = {
   startTime: null,
   autoCheckTimer: null,
   gameLocked: false,
-  competitiveEnded: false,
-  competitiveFrozenAt: 0,
+  sprintEnded: false,
+  sprintFrozenAt: 0,
   hardcoreFailed: false,
   hardcoreFrozenAt: 0,
   practicePaused: false,
@@ -586,7 +586,7 @@ autoCheckStyleInputs.forEach(input => {
 });
 
 // ---- Skip next digit(s) ----
-// Practice: works any time. Competitive/Hardcore: only before the clock starts.
+// Practice: works any time. Sprint/Hardcore: only before the clock starts.
 function nextPiIdx() {
   return state.entries.length > 0
     ? state.entries[state.entries.length - 1].seqIdxAfter
@@ -596,7 +596,7 @@ function nextPiIdx() {
 function canSkip() {
   if (isInputLocked()) return false;
   if (nextPiIdx() >= state.digits.length) return false;
-  if ((state.mode === 'competitive' || state.mode === 'hardcore') && state.startTime !== null) return false;
+  if ((state.mode === 'sprint' || state.mode === 'hardcore') && state.startTime !== null) return false;
   return true;
 }
 
@@ -753,8 +753,8 @@ modeInputs.forEach(input => {
 function attemptModeChange(newMode) {
   if (newMode === state.mode) return true;
 
-  // Hardcore, Competitive, and Bullet always start from a fresh session.
-  if (newMode === 'competitive' || newMode === 'hardcore' || newMode === 'bullet') {
+  // Hardcore, Sprint, and Bullet always start from a fresh session.
+  if (newMode === 'sprint' || newMode === 'hardcore' || newMode === 'bullet') {
     if (state.entries.length > 0) {
       const ok = confirm('This will reset your current progress. Start a new ' + newMode + ' session?');
       if (!ok) return false;
@@ -765,18 +765,18 @@ function attemptModeChange(newMode) {
     return true;
   }
 
-  // Leaving an active competitive session to Practice requires confirmation.
-  if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded && newMode === 'practice') {
-    const ok = confirm('Your competitive session will end. Continue in practice mode?');
+  // Leaving an active sprint session to Practice requires confirmation.
+  if (state.mode === 'sprint' && state.gameLocked && !state.sprintEnded && newMode === 'practice') {
+    const ok = confirm('Your sprint session will end. Continue in practice mode?');
     if (!ok) return false;
     state.gameLocked = false;
   }
 
-  if (state.mode === 'competitive' && newMode !== 'competitive') {
-    if (state.competitiveEnded && state.startTime !== null) {
-      state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
+  if (state.mode === 'sprint' && newMode !== 'sprint') {
+    if (state.sprintEnded && state.startTime !== null) {
+      state.startTime = performance.now() - state.sprintFrozenAt * 1000;
     }
-    state.competitiveEnded = false;
+    state.sprintEnded = false;
     state.gameLocked = false;
   }
 
@@ -810,8 +810,8 @@ function clearSession() {
   state.entries = [];
   state.startTime = null;
   state.gameLocked = false;
-  state.competitiveEnded = false;
-  state.competitiveFrozenAt = 0;
+  state.sprintEnded = false;
+  state.sprintFrozenAt = 0;
   state.hardcoreFailed = false;
   state.hardcoreFrozenAt = 0;
   state.practicePaused = false;
@@ -847,13 +847,13 @@ function applyModeDefaults() {
 function updateModeBadge() {
   const modeName = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
   let delayText;
-  if (state.mode === 'competitive' && state.competitiveEnded) delayText = 'ended';
+  if (state.mode === 'sprint' && state.sprintEnded) delayText = 'ended';
   else if (state.mode === 'hardcore' && state.hardcoreFailed) delayText = 'failed';
   else if (state.mode === 'bullet' && state.bulletGameOver) {
     delayText = state.bulletEndReason === 'stopped' ? 'stopped' : 'time out';
   }
-  else if (state.mode === 'competitive') {
-    delayText = COMPETITIVE_PER_DIGIT_SECONDS + 's/digit, +' + COMPETITIVE_LOOKAHEAD;
+  else if (state.mode === 'sprint') {
+    delayText = SPRINT_PER_DIGIT_SECONDS + 's/digit, +' + SPRINT_LOOKAHEAD;
   }
   else if (state.mode === 'bullet') {
     delayText = state.bulletStartSeconds + 's start, +' + state.bulletBonusSeconds +
@@ -868,7 +868,7 @@ function updateModeBadge() {
     }
   }
   modeBadge.textContent = modeName + ' · ' + delayText;
-  modeBadge.classList.toggle('locked', state.gameLocked && !state.competitiveEnded);
+  modeBadge.classList.toggle('locked', state.gameLocked && !state.sprintEnded);
 }
 
 function updateKeypadHint() {
@@ -881,8 +881,8 @@ function updateKeypadHint() {
 function updateModeHint() {
   const hints = {
     practice: 'Type or paste digits. No time limit. Backspace allowed.',
-    competitive: COMPETITIVE_PER_DIGIT_SECONDS + 's per-digit auto-check (or after ' +
-      COMPETITIVE_LOOKAHEAD + ' more digits, whichever first), 15 minute limit, wrong digits stay locked. Reset is required to start.',
+    sprint: SPRINT_PER_DIGIT_SECONDS + 's per-digit auto-check (or after ' +
+      SPRINT_LOOKAHEAD + ' more digits, whichever first), 15 minute limit, wrong digits stay locked. Reset is required to start.',
     hardcore: 'One wrong digit ends the run. Instant lock-in, no backspace. Reset is required to start.',
     bullet: 'Clock: start with ' + state.bulletStartSeconds + 's; +' +
       state.bulletBonusSeconds + 's per correct, −' + state.bulletPenaltySeconds +
@@ -892,7 +892,7 @@ function updateModeHint() {
 }
 
 function isInputLocked() {
-  if (state.competitiveEnded && state.mode === 'competitive') return true;
+  if (state.sprintEnded && state.mode === 'sprint') return true;
   if (state.hardcoreFailed && state.mode === 'hardcore') return true;
   if (state.bulletGameOver && state.mode === 'bullet') return true;
   return false;
@@ -910,12 +910,12 @@ function checkHardcoreFail() {
   }
 }
 
-// ---- Competitive session lifecycle ----
-function endCompetitive() {
-  if (state.mode !== 'competitive' || state.competitiveEnded) return;
-  state.competitiveEnded = true;
+// ---- Sprint session lifecycle ----
+function endSprint() {
+  if (state.mode !== 'sprint' || state.sprintEnded) return;
+  state.sprintEnded = true;
   const elapsed = state.startTime === null ? 0 : (performance.now() - state.startTime) / 1000;
-  state.competitiveFrozenAt = Math.min(COMPETITIVE_LIMIT_SECONDS, elapsed);
+  state.sprintFrozenAt = Math.min(SPRINT_LIMIT_SECONDS, elapsed);
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
@@ -1054,11 +1054,11 @@ function practiceResume() {
 }
 
 function continueInPractice() {
-  if (state.mode === 'competitive' && state.competitiveEnded) {
+  if (state.mode === 'sprint' && state.sprintEnded) {
     if (state.startTime !== null) {
-      state.startTime = performance.now() - state.competitiveFrozenAt * 1000;
+      state.startTime = performance.now() - state.sprintFrozenAt * 1000;
     }
-    state.competitiveEnded = false;
+    state.sprintEnded = false;
     state.gameLocked = false;
   } else if (state.mode === 'bullet' && state.bulletGameOver) {
     if (state.startTime !== null) {
@@ -1110,7 +1110,7 @@ function inputDigit(d) {
 
   if (state.startTime === null) {
     state.startTime = performance.now();
-    if (state.mode === 'competitive') state.gameLocked = true;
+    if (state.mode === 'sprint') state.gameLocked = true;
     // Bullet's three timing inputs (and their reset-to-default button)
     // lock the moment the run starts; refresh so the × hides immediately.
     if (state.mode === 'bullet') updateResetVisibility();
@@ -1214,9 +1214,9 @@ function backspace() {
   if (state.mode === 'hardcore') return;
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
-  if (state.mode === 'competitive') {
+  if (state.mode === 'sprint') {
     if (last.checked && last.status === 'wrong') return;
-    if (last.skipped) return; // skipped digits in competitive can't be erased
+    if (last.skipped) return; // skipped digits in sprint can't be erased
   }
 
   // Internal tracking (not displayed; reserved for future stats dialog).
@@ -1275,9 +1275,9 @@ function backspace() {
 
 function forceCheck() {
   if (isInputLocked()) return;
-  // Competitive disallows manual force-checks — only the per-digit and
+  // Sprint disallows manual force-checks — only the per-digit and
   // lookahead auto-checks should reveal results.
-  if (state.mode === 'competitive') return;
+  if (state.mode === 'sprint') return;
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
@@ -1300,7 +1300,7 @@ function useOnIdleAutoCheck() {
 // oldest pending entry auto-checks. Hardcore is 0 (instant), so its
 // per-digit timer never accumulates anyway.
 function lookaheadLimit() {
-  if (state.mode === 'competitive') return COMPETITIVE_LOOKAHEAD;
+  if (state.mode === 'sprint') return SPRINT_LOOKAHEAD;
   if (state.mode === 'practice') return state.practiceLookahead | 0;
   return 0;
 }
@@ -1597,9 +1597,9 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
     let cls = 'digit ' + e.status;
     if (e.skipped) cls += ' skipped';
     else if (e.corrected && e.status === 'correct') cls += ' corrected';
-    const showDiff = ((ctx.inComp && ctx.competitiveEnded) || ctx.inPracticeAnnot)
+    const showDiff = ((ctx.inSprint && ctx.sprintEnded) || ctx.inPracticeAnnot)
       && e.status === 'wrong' && e.expected;
-    const showMask = ctx.inComp && !ctx.competitiveEnded && e.status === 'wrong';
+    const showMask = ctx.inSprint && !ctx.sprintEnded && e.status === 'wrong';
     if (showDiff) {
       cls += ' diff';
       main.className = cls;
@@ -1657,7 +1657,7 @@ function computeEntryFingerprint(e, ctx, hasPrimeAfter) {
   return 'c|' + e.char + '|' + e.status + '|' + (e.expected || '') + '|' +
     (e.skipped ? 1 : 0) + '|' + (e.corrected ? 1 : 0) + '|' +
     e.missedBefore.join(',') + '|' +
-    (ctx.inComp ? 1 : 0) + '|' + (ctx.competitiveEnded ? 1 : 0) + '|' +
+    (ctx.inSprint ? 1 : 0) + '|' + (ctx.sprintEnded ? 1 : 0) + '|' +
     (ctx.inPractice ? 1 : 0) + '|' +
     (ctx.inPracticeAnnot ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
 }
@@ -1670,8 +1670,8 @@ function render() {
   const primeBoundaries = def && def.primeBoundaries;
 
   const ctx = {
-    inComp: state.mode === 'competitive',
-    competitiveEnded: state.competitiveEnded,
+    inSprint: state.mode === 'sprint',
+    sprintEnded: state.sprintEnded,
     inPractice: state.mode === 'practice',
     inPracticeAnnot: state.mode === 'practice' && state.practiceDisplay === 'annotations',
     autoCheckSeconds: state.autoCheckSeconds,
@@ -1818,7 +1818,7 @@ function render() {
 
   piDisplayEl.classList.toggle('grouped', gs > 0);
   piDisplayEl.classList.toggle('diff-mode',
-    (state.mode === 'competitive' && state.competitiveEnded) ||
+    (state.mode === 'sprint' && state.sprintEnded) ||
     (state.mode === 'practice' && state.practiceDisplay === 'annotations'));
   updateKeypadHint();
   // Defer to next frame so the new content is laid out before we measure
@@ -1835,7 +1835,7 @@ function render() {
   statSkipped.textContent = zeroDash(skipped);
   statFixed.textContent = zeroDash(fixed);
   // Doubles as a key for the dotted underline on corrected digits.
-  // Hardcore and competitive don't allow the backspace-then-retype path
+  // Hardcore and sprint don't allow the backspace-then-retype path
   // so they'll never have fixed > 0; bullet and practice will.
   statFixed.classList.toggle('corrected', fixed > 0);
 
@@ -1857,22 +1857,22 @@ function formatTime(seconds) {
   return Math.floor(total / 60) + ':' + pad(s);
 }
 
-// Where to display the active countdown. Competitive and bullet share
+// Where to display the active countdown. Sprint and bullet share
 // the same per-motion-mode layout: big top in high motion, folded into
 // the bottom-right stat-time slot in medium/low/zen.
 function showCompTimerInline() {
   if (state.motionMode === 'high') return false;
-  return state.mode === 'competitive' || state.mode === 'bullet';
+  return state.mode === 'sprint' || state.mode === 'bullet';
 }
 
-// Returns the countdown remaining in seconds for competitive / bullet,
+// Returns the countdown remaining in seconds for sprint / bullet,
 // or null for other modes. Handles the not-yet-started, frozen-at-end,
 // and live cases, and triggers endBullet when the bullet budget hits 0.
 function getModeRemaining(elapsed) {
-  if (state.mode === 'competitive') {
-    if (state.startTime === null) return COMPETITIVE_LIMIT_SECONDS;
-    if (state.competitiveEnded) return Math.max(0, COMPETITIVE_LIMIT_SECONDS - state.competitiveFrozenAt);
-    return Math.max(0, COMPETITIVE_LIMIT_SECONDS - elapsed);
+  if (state.mode === 'sprint') {
+    if (state.startTime === null) return SPRINT_LIMIT_SECONDS;
+    if (state.sprintEnded) return Math.max(0, SPRINT_LIMIT_SECONDS - state.sprintFrozenAt);
+    return Math.max(0, SPRINT_LIMIT_SECONDS - elapsed);
   }
   if (state.mode === 'bullet') {
     if (state.startTime === null) return state.bulletStartSeconds;
@@ -1899,16 +1899,16 @@ function tickTime() {
     }
     statTime.classList.remove('frozen');
   } else {
-    if (state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded) {
+    if (state.mode === 'sprint' && state.gameLocked && !state.sprintEnded) {
       const elapsedNow = (performance.now() - state.startTime) / 1000;
-      if (elapsedNow >= COMPETITIVE_LIMIT_SECONDS) {
-        endCompetitive();
+      if (elapsedNow >= SPRINT_LIMIT_SECONDS) {
+        endSprint();
       }
     }
 
     let elapsed;
-    if (state.competitiveEnded && state.mode === 'competitive') {
-      elapsed = state.competitiveFrozenAt;
+    if (state.sprintEnded && state.mode === 'sprint') {
+      elapsed = state.sprintFrozenAt;
     } else if (state.hardcoreFailed && state.mode === 'hardcore') {
       elapsed = state.hardcoreFrozenAt;
     } else if (state.bulletGameOver && state.mode === 'bullet') {
@@ -1921,17 +1921,17 @@ function tickTime() {
 
     statTime.classList.toggle('paused', state.mode === 'practice' && state.practicePaused);
 
-    const ended = state.competitiveEnded || state.bulletGameOver;
+    const ended = state.sprintEnded || state.bulletGameOver;
     if (showCompTimerInline()) {
       const remaining = getModeRemaining(elapsed);
       statTime.textContent = formatTime(Math.max(0, remaining)) + ' remaining';
       statTime.classList.add('countdown');
       statTime.classList.toggle('frozen', ended);
-    } else if (state.mode === 'competitive') {
-      const capped = Math.min(elapsed, COMPETITIVE_LIMIT_SECONDS);
+    } else if (state.mode === 'sprint') {
+      const capped = Math.min(elapsed, SPRINT_LIMIT_SECONDS);
       statTime.textContent = formatTime(capped) + ' elapsed';
       statTime.classList.remove('countdown');
-      statTime.classList.toggle('frozen', state.competitiveEnded);
+      statTime.classList.toggle('frozen', state.sprintEnded);
     } else if (state.mode === 'bullet') {
       statTime.textContent = formatTime(elapsed) + ' elapsed';
       statTime.classList.remove('countdown');
@@ -1947,22 +1947,22 @@ function tickTime() {
     }
   }
 
-  // Big top countdown — competitive and bullet in high motion only.
+  // Big top countdown — sprint and bullet in high motion only.
   // Medium/low/zen fold the countdown into the inline stat-time slot.
-  if ((state.mode === 'competitive' || state.mode === 'bullet') && !showCompTimerInline()) {
+  if ((state.mode === 'sprint' || state.mode === 'bullet') && !showCompTimerInline()) {
     let bigElapsed;
     if (state.startTime === null) {
       bigElapsed = 0;
-    } else if (state.competitiveEnded && state.mode === 'competitive') {
-      bigElapsed = state.competitiveFrozenAt;
+    } else if (state.sprintEnded && state.mode === 'sprint') {
+      bigElapsed = state.sprintFrozenAt;
     } else if (state.bulletGameOver && state.mode === 'bullet') {
       bigElapsed = state.bulletFrozenAt;
     } else {
       bigElapsed = (performance.now() - state.startTime) / 1000;
     }
     const remaining = getModeRemaining(bigElapsed);
-    const ended = state.competitiveEnded || state.bulletGameOver;
-    const active = (state.mode === 'competitive' && state.gameLocked) ||
+    const ended = state.sprintEnded || state.bulletGameOver;
+    const active = (state.mode === 'sprint' && state.gameLocked) ||
                    (state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver);
     compTimerEl.textContent = formatTime(remaining);
     compTimerEl.classList.toggle('ended', ended);
@@ -1976,10 +1976,10 @@ setInterval(tickTime, 250);
 function updateUI() {
   const hasEntries = state.entries.length > 0;
   const inputLocked = isInputLocked();
-  const compActive = state.mode === 'competitive' && state.gameLocked && !state.competitiveEnded;
+  const sprintActive = state.mode === 'sprint' && state.gameLocked && !state.sprintEnded;
   const hardcoreActive = state.mode === 'hardcore' && state.startTime !== null && !state.hardcoreFailed;
   const practiceActive = state.mode === 'practice' && state.startTime !== null && !state.practicePaused;
-  const gameOver = (state.mode === 'competitive' && state.competitiveEnded) ||
+  const gameOver = (state.mode === 'sprint' && state.sprintEnded) ||
                    (state.mode === 'hardcore' && state.hardcoreFailed) ||
                    (state.mode === 'bullet' && state.bulletGameOver);
   const bulletActive = state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver;
@@ -2002,20 +2002,20 @@ function updateUI() {
   if (!backDisabled) {
     if (state.mode === 'hardcore') backDisabled = true;
     else if (!hasEntries) backDisabled = true;
-    else if (state.mode === 'competitive') {
+    else if (state.mode === 'sprint') {
       const last = state.entries[state.entries.length - 1];
       if (last.checked && last.status === 'wrong') backDisabled = true;
     }
   }
   allBackBtns.forEach(btn => { btn.disabled = backDisabled; });
 
-  // Competitive: no manual force-check — only the per-digit / lookahead
+  // Sprint: no manual force-check — only the per-digit / lookahead
   // auto-checks reveal results. Disable the check button outright.
-  const checkDisabled = inputLocked || !hasPending() || state.mode === 'competitive';
+  const checkDisabled = inputLocked || !hasPending() || state.mode === 'sprint';
   allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
   // Stop button: ends in comp/hardcore/bullet, pseudo-pauses in practice
-  stopBtn.hidden = !(compActive || hardcoreActive || practiceActive || bulletActive);
+  stopBtn.hidden = !(sprintActive || hardcoreActive || practiceActive || bulletActive);
   stopBtn.textContent = state.mode === 'practice' ? 'Pause' : 'Stop';
   // Practice-mode Pause is a quiet courtesy button — toned-down border
   // and colour. Comp/hardcore Stop keeps the alert-red border.
@@ -2027,20 +2027,20 @@ function updateUI() {
   // the prominent button and demote Continue.
   resetBtn.classList.toggle('primary', gameOver);
   continueBtn.classList.toggle('secondary', gameOver);
-  // Big top timer is used in competitive AND bullet, but only in high
+  // Big top timer is used in sprint AND bullet, but only in high
   // motion. Medium/low fold the countdown into the bottom-right
   // stat-time slot via showCompTimerInline().
-  const showCompTimer = (state.mode === 'competitive' || state.mode === 'bullet') &&
+  const showCompTimer = (state.mode === 'sprint' || state.mode === 'bullet') &&
                         !showCompTimerInline();
   compTimerEl.hidden = !showCompTimer;
-  compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.competitiveEnded && !state.bulletGameOver);
+  compTimerEl.classList.toggle('dimmed', state.compTimerHidden && !state.sprintEnded && !state.bulletGameOver);
   compTimerEl.classList.toggle('bullet', state.mode === 'bullet');
   compTimerEl.setAttribute('aria-label',
-    (state.mode === 'bullet' ? 'Bullet' : 'Competitive') + ' countdown, click to hide');
+    (state.mode === 'bullet' ? 'Bullet' : 'Sprint') + ' countdown, click to hide');
 
   // Click-to-dim elapsed/countdown clock. Also force-dimmed by default in
   // low-motion practice (the user can click to reveal).
-  statTime.classList.toggle('dimmed', state.elapsedDimmed && !state.competitiveEnded && !state.hardcoreFailed);
+  statTime.classList.toggle('dimmed', state.elapsedDimmed && !state.sprintEnded && !state.hardcoreFailed);
 
   // Cursor: hidden on pause / game-over (any mode), so the display reads
   // as static rather than "still typing".
@@ -2099,7 +2099,7 @@ allBackBtns.forEach(btn => wireKey(btn, backspace));
 allCheckBtns.forEach(btn => wireKey(btn, forceCheck));
 resetBtn.addEventListener('click', reset);
 stopBtn.addEventListener('click', () => {
-  if (state.mode === 'competitive') endCompetitive();
+  if (state.mode === 'sprint') endSprint();
   else if (state.mode === 'hardcore') endHardcore();
   else if (state.mode === 'bullet') endBullet('stopped');
   else if (state.mode === 'practice') practicePause();
@@ -2107,8 +2107,8 @@ stopBtn.addEventListener('click', () => {
 continueBtn.addEventListener('click', () => continueInPractice());
 
 function toggleCompTimer() {
-  if (state.mode !== 'competitive' && state.mode !== 'bullet') return;
-  if (state.competitiveEnded || state.bulletGameOver) return; // ended state always visible
+  if (state.mode !== 'sprint' && state.mode !== 'bullet') return;
+  if (state.sprintEnded || state.bulletGameOver) return; // ended state always visible
   state.compTimerHidden = !state.compTimerHidden;
   updateUI();
 }
@@ -2180,7 +2180,7 @@ document.addEventListener('keydown', (e) => {
   }
 
   // "V" skips the next sequence digit. Practice: any time;
-  // Competitive/Hardcore: only before the clock starts.
+  // Sprint/Hardcore: only before the clock starts.
   if (e.key === 'v' || e.key === 'V') {
     skipNextDigit();
     e.preventDefault();
