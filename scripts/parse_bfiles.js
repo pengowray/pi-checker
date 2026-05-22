@@ -21,6 +21,9 @@ const SOURCES = [
   { id: 'A002194', file: 'sqrt3.txt',     strip: 1, key: 'sqrt3',     outKey: 'sqrt3',     label: '√3',       integer: '1',  base: 10 },
   { id: 'A002163', file: 'sqrt5.txt',     strip: 1, key: 'sqrt5',     outKey: 'sqrt5',     label: '√5',       integer: '2',  base: 10 },
   { id: 'A007524', file: 'log10_2.txt',   strip: 0, key: 'log10_2',   outKey: 'log10_2',   label: 'log₁₀ 2',  integer: '0',  base: 10 },
+  { id: 'A002388', file: 'pi_sq.txt',     strip: 1, key: 'pi_sq',     outKey: 'pi-squared', label: 'π²',       integer: '9',  base: 10 },
+  { id: 'A001620', file: 'euler_mascheroni.txt', strip: 0, key: 'euler_mascheroni', outKey: 'euler-mascheroni', label: 'γ (Euler–Mascheroni)', integer: '0', base: 10 },
+  { id: 'A013661', file: 'zeta2.txt',     strip: 1, key: 'zeta2',     outKey: 'zeta2',     label: 'ζ(2) = π²/6', integer: '1', base: 10 },
   { id: 'A004601', file: 'pi_binary.txt', strip: 2, key: 'pi_binary', outKey: 'pi-binary', label: 'π in binary', integer: '11', base: 2  },
   // A062964 stores each hex digit as a decimal int 0-15; map to 0-9A-F.
   { id: 'A062964', file: 'pi_hex.txt',    strip: 1, key: 'pi_hex',    outKey: 'pi-hex',    label: 'π in hex', integer: '3',  base: 16 },

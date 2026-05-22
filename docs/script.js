@@ -115,6 +115,36 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '',
   },
+  'pi-squared': {
+    label: 'π² (pi squared)',
+    shortLabel: 'π²',
+    hintLabel: 'pi squared',
+    titleHtml: '&pi;&sup2; Checker',
+    integerPart: '9',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  zeta2: {
+    label: 'ζ(2) = π²/6',
+    shortLabel: 'ζ(2)',
+    hintLabel: 'zeta(2), the Basel constant (π²/6)',
+    titleHtml: '&zeta;(2) Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
+  'euler-mascheroni': {
+    label: 'γ (Euler–Mascheroni)',
+    shortLabel: 'γ',
+    hintLabel: 'the Euler–Mascheroni constant',
+    titleHtml: '&gamma; Checker',
+    integerPart: '0',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
   champernowne: {
     label: 'Champernowne’s constant',
     shortLabel: 'Champernowne',
@@ -178,7 +208,7 @@ const SEQUENCES = {
 
 // Pull in the bundled secondary sequences (short fallbacks)
 if (window.SEQUENCE_DATA) {
-  for (const key of ['phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2', 'pi-binary', 'pi-hex']) {
+  for (const key of ['phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2', 'pi-squared', 'zeta2', 'euler-mascheroni', 'pi-binary', 'pi-hex']) {
     if (window.SEQUENCE_DATA[key]) {
       SEQUENCES[key].digits = window.SEQUENCE_DATA[key].digits;
     }
@@ -2570,6 +2600,7 @@ if (correctTile) {
 // quickly) and on demand whenever the user picks a different sequence.
 const LONG_AVAILABLE = new Set([
   'pi', 'phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2',
+  'pi-squared', 'zeta2', 'euler-mascheroni',
   'pi-binary', 'pi-hex',
 ]);
 const longLoadPromises = new Map();
