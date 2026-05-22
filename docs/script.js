@@ -1552,7 +1552,7 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
   if (e.checked) {
     let cls = 'digit ' + e.status;
     if (e.skipped) cls += ' skipped';
-    else if (e.corrected && ctx.inPractice && e.status === 'correct') cls += ' corrected';
+    else if (e.corrected && e.status === 'correct') cls += ' corrected';
     const showDiff = ((ctx.inComp && ctx.competitiveEnded) || ctx.inPracticeAnnot)
       && e.status === 'wrong' && e.expected;
     const showMask = ctx.inComp && !ctx.competitiveEnded && e.status === 'wrong';
@@ -1748,7 +1748,7 @@ function render() {
       missed += e.missedBefore.length;
       if (e.status === 'correct') {
         if (e.skipped) skipped += 1;
-        else if (e.corrected && ctx.inPractice) fixed += 1;
+        else if (e.corrected) fixed += 1;
         else correct += 1;
       } else if (e.status === 'wrong') {
         wrong += 1;
@@ -1790,10 +1790,10 @@ function render() {
   statMissed.textContent = zeroDash(missed);
   statSkipped.textContent = zeroDash(skipped);
   statFixed.textContent = zeroDash(fixed);
-  // Doubles as a key for the dotted underline on corrected digits — only
-  // meaningful in practice mode (where corrected digits actually render).
-  statFixed.classList.toggle('corrected',
-    state.mode === 'practice' && fixed > 0);
+  // Doubles as a key for the dotted underline on corrected digits.
+  // Hardcore and competitive don't allow the backspace-then-retype path
+  // so they'll never have fixed > 0; bullet and practice will.
+  statFixed.classList.toggle('corrected', fixed > 0);
 
   updateUI();
 }
