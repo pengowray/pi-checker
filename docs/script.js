@@ -353,7 +353,7 @@ const state = {
 };
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
-let lastSkipAmount = 100;
+let lastSkipAmount = 50;
 
 // ---- DOM refs ----
 const userDigitsEl = document.getElementById('user-digits');
