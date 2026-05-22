@@ -880,13 +880,13 @@ function updateKeypadHint() {
 
 function updateModeHint() {
   const hints = {
-    practice: 'Type or paste digits. Backspace removes recent input.',
+    practice: 'Type or paste digits. No time limit. Backspace allowed.',
     competitive: COMPETITIVE_PER_DIGIT_SECONDS + 's per-digit auto-check (or after ' +
       COMPETITIVE_LOOKAHEAD + ' more digits, whichever first), 15 minute limit, wrong digits stay locked. Reset is required to start.',
-    hardcore: 'Instant lock-in, no backspace. One wrong digit ends the run. Reset is required to start.',
-    bullet: 'Chess-clock: start with ' + state.bulletStartSeconds + 's; +' +
+    hardcore: 'One wrong digit ends the run. Instant lock-in, no backspace. Reset is required to start.',
+    bullet: 'Clock: start with ' + state.bulletStartSeconds + 's; +' +
       state.bulletBonusSeconds + 's per correct, −' + state.bulletPenaltySeconds +
-      's per wrong (refunded if rescored). Backspace fixes errors but does not refund time. Reach 0 to end.',
+      's per wrong (refunded if rescored). Backspace allowed but does not refund time.',
   };
   modeHint.textContent = hints[state.mode] || '';
 }
