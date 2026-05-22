@@ -5,6 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#1a1a1a">
   <title>Pi Checker by Pengo Wray</title>
+  <script>
+    // Apply theme / motion / keypad attributes BEFORE the stylesheet loads
+    // so a dark-mode (or zen, or hidden-keypad) reload doesn't flash the
+    // light/default styles for one frame. Mirrors what script.js does
+    // later via initTheme / applyMotionMode / applyHideKeypad — those
+    // re-set the same attribute, so they're a no-op visually.
+    (function() {
+      try {
+        var t = localStorage.getItem('pi-theme');
+        if (t !== 'light' && t !== 'dark') {
+          t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', t);
+        var m = localStorage.getItem('pi-motion-mode');
+        if (m !== 'high' && m !== 'medium' && m !== 'low' && m !== 'zen') {
+          m = (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) ? 'low' : 'medium';
+        }
+        document.documentElement.setAttribute('data-motion', m);
+        var k = localStorage.getItem('pi-hide-keypad');
+        document.documentElement.setAttribute('data-keypad', k === '1' ? 'hidden' : 'shown');
+      } catch (e) { /* localStorage / matchMedia unavailable — fall through */ }
+    })();
+  </script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -192,6 +215,10 @@
           </div>
           <div class="mode-selector" role="radiogroup" aria-label="Motion">
             <label class="mode-option">
+              <input type="radio" name="motion-mode" value="zen">
+              <span>Zen</span>
+            </label>
+            <label class="mode-option">
               <input type="radio" name="motion-mode" value="low">
               <span>Low</span>
             </label>
@@ -202,10 +229,6 @@
             <label class="mode-option">
               <input type="radio" name="motion-mode" value="high">
               <span>High</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="motion-mode" value="zen">
-              <span>Zen</span>
             </label>
           </div>
           <small class="hint">Low: solid cursor, no animated indicators, timer hidden in practice. Medium: subtle check button, last-digit indicator on check. High: blinking cursor and per-digit auto-fill animation. Zen: greyscale, minimal interface, counters only shown on pause or game over (Esc to exit).</small>
