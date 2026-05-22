@@ -2305,6 +2305,28 @@ if (mobileInputEl) {
     inputPaste(text);
     mobileInputEl.value = '';
   });
+  // When the OS keyboard surfaces and resizes the visual viewport, the
+  // cursor may end up hidden behind it. Scroll it into view so the user
+  // can see what they're typing without having to scroll the page first.
+  // Run on focus and on the next visual-viewport resize (keyboard opening
+  // is async on Android, so an immediate scroll uses stale measurements).
+  mobileInputEl.addEventListener('focus', () => {
+    const scrollToCursor = () => {
+      if (cursorEl && cursorEl.scrollIntoView) {
+        cursorEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    };
+    scrollToCursor();
+    if (window.visualViewport) {
+      const onResize = () => {
+        window.visualViewport.removeEventListener('resize', onResize);
+        scrollToCursor();
+      };
+      window.visualViewport.addEventListener('resize', onResize);
+      // Safety: if no resize fires within 500ms, drop the listener.
+      setTimeout(() => window.visualViewport.removeEventListener('resize', onResize), 500);
+    }
+  });
 }
 
 // Tapping the pi-display focuses the hidden input — but only when the
