@@ -54,6 +54,16 @@
             <span id="user-digits"></span><span class="cursor" id="cursor">|</span>
           </div>
         </div>
+        <!--
+          Off-screen input the pi-display focuses on tap when the on-screen
+          keypad is hidden, so mobile users get the native virtual keyboard.
+          inputmode is set per-sequence (numeric for decimal, text for hex /
+          spaced). Kept inside #pi-display so tapping anywhere in the
+          display area triggers focus on mobile via the click handler.
+        -->
+        <input id="mobile-input" type="text" inputmode="numeric"
+               autocomplete="off" autocapitalize="off" autocorrect="off"
+               spellcheck="false" aria-hidden="true" tabindex="-1">
       </div>
     </section>
 
@@ -356,7 +366,7 @@
 
         <div class="skip-inline">
           <label for="skip-count" class="skip-inline-label">Skip:</label>
-          <input type="number" id="skip-count" min="1" value="100">
+          <input type="number" id="skip-count" min="1" value="50">
         </div>
         <button id="skip-confirm" type="button" class="setting-action skip-confirm-btn">Skip <span id="skip-confirm-count">100</span></button>
       </div>

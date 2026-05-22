@@ -808,6 +808,28 @@ input[type="range"]:disabled {
 .keypad.user-hidden { display: none; }
 :root[data-keypad="hidden"] .keypad-hint { display: none; }
 
+/* When the on-screen keypad is hidden, signal that tapping the display
+   triggers the OS keyboard (script.js focuses #mobile-input on click). */
+:root[data-keypad="hidden"] .pi-display { cursor: text; }
+
+/* Off-screen mobile-input. Visible to assistive tech / JS focus but not
+   to the user — opacity 0 + 1×1px so it doesn't take layout space. Kept
+   visible (not display:none) so .focus() actually surfaces the keyboard
+   on iOS / Android. */
+#mobile-input {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font-size: 16px; /* >=16px avoids iOS Safari's zoom-on-focus. */
+  pointer-events: none;
+}
+
 .keypad-decimal {
   grid-template-columns: repeat(3, 1fr);
   grid-template-areas:

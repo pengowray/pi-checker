@@ -380,6 +380,7 @@ const practiceLookaheadInput = document.getElementById('practice-lookahead');
 const practiceLookaheadSetting = document.getElementById('practice-lookahead-setting');
 const cursorEl = document.getElementById('cursor');
 const zenExitBtn = document.getElementById('zen-exit');
+const mobileInputEl = document.getElementById('mobile-input');
 
 const statCorrect = document.getElementById('stat-correct');
 const statWrong = document.getElementById('stat-wrong');
@@ -463,6 +464,10 @@ hideKeypadInputs.forEach(input => {
     if (!input.checked) return;
     applyHideKeypad(input.value === 'hide');
     updateResetVisibility();
+    // updateUI applies the .user-hidden class to the keypads; without
+    // this the toggle change wouldn't visually hide the keypad until
+    // the next render (e.g. the user typing a digit).
+    updateUI();
   });
 });
 
@@ -599,6 +604,7 @@ function applySequence(id) {
   // sequence when the app actually re-initialised back to the default.
   if (sequenceSelect.value !== id) sequenceSelect.value = id;
   updateSequenceDigitsHint();
+  updateMobileInputMode();
   // Fire-and-forget: fetch the long version if we have a source for it.
   // Already-loaded sequences are a no-op (loadLong dedupes).
   loadLong(id);
@@ -1927,6 +1933,65 @@ document.addEventListener('paste', (e) => {
   e.preventDefault();
   inputPaste(text);
 });
+
+// ---- Hidden mobile-input handlers ----
+// When the on-screen keypad is hidden, tapping the pi-display focuses
+// this off-screen input to trigger the OS virtual keyboard. We route
+// input → inputDigit, paste → inputPaste, and Backspace/Enter to their
+// usual handlers. Keep the input perpetually empty so each keystroke
+// produces a single 'input' event with a new value of length 1.
+if (mobileInputEl) {
+  mobileInputEl.addEventListener('input', () => {
+    const text = mobileInputEl.value;
+    if (!text) return;
+    mobileInputEl.value = '';
+    // Spaces / typed text outside the alphabet are filtered inside
+    // inputDigit, so we don't need to pre-filter here.
+    for (const c of text) inputDigit(c);
+  });
+  mobileInputEl.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'Backspace') {
+      backspace();
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      forceCheck();
+      e.preventDefault();
+    } else if (e.key === 'Escape' && state.motionMode === 'zen') {
+      exitZenMode();
+      mobileInputEl.blur();
+      e.preventDefault();
+    }
+  });
+  mobileInputEl.addEventListener('paste', (e) => {
+    if (!e.clipboardData) return;
+    const text = e.clipboardData.getData('text');
+    if (!text) return;
+    e.preventDefault();
+    inputPaste(text);
+    mobileInputEl.value = '';
+  });
+}
+
+// Tapping the pi-display focuses the hidden input — but only when the
+// on-screen keypad is hidden, so we don't pop the OS keyboard on every
+// click. Must run inside the synchronous click handler so iOS allows
+// programmatic focus to surface the keyboard.
+piDisplayEl.addEventListener('click', (e) => {
+  if (!state.hideKeypad || !mobileInputEl) return;
+  if (e.target === mobileInputEl) return;
+  mobileInputEl.focus();
+});
+
+// Match the virtual-keyboard layout to the active sequence's alphabet.
+// Digit-only sequences (pi, primes, primes-spaced, decimal sequences)
+// get the numeric pad. Hex (and any future text-style alphabet) gets
+// the full keyboard via inputmode=text.
+function updateMobileInputMode() {
+  if (!mobileInputEl) return;
+  const onlyDigits = /^[0-9 ]+$/.test(state.alphabet);
+  mobileInputEl.setAttribute('inputmode', onlyDigits ? 'numeric' : 'text');
+}
 
 // ---- Settings reset buttons ----
 resetBtns.forEach(btn => {
