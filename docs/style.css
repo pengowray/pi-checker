@@ -655,6 +655,12 @@ input[type="range"]:disabled {
 }
 :root[data-motion="zen"] .key-back { color: var(--fg); }
 
+/* Primary Reset uses --accent for both background and "color: white";
+   zen remaps --accent to --fg, which leaves white text on a light
+   background in dark mode (unreadable). Flip text to --bg so the
+   button stays a high-contrast inverted chip in either theme. */
+:root[data-motion="zen"] #reset-btn.primary { color: var(--bg); }
+
 /* Counters hidden by default; revealed only when paused or game-over
    (the JS sets .zen-reveal on <html>). */
 :root[data-motion="zen"] .stats { display: none; }
