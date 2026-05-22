@@ -966,6 +966,7 @@ function applyBulletScoring() {
         state.bulletBudget -= state.bulletPenaltySeconds;
         state.bulletPenalizedPositions.add(piPos);
         e.bulletPenalized = true;
+        floatBulletDelta(-state.bulletPenaltySeconds);
       }
     } else if (e.status === 'correct') {
       if (e.bulletPenalized && !e.bulletRefunded) {
@@ -974,13 +975,34 @@ function applyBulletScoring() {
         // wrong here still can't be re-penalised.
         state.bulletBudget += state.bulletPenaltySeconds;
         e.bulletRefunded = true;
+        floatBulletDelta(+state.bulletPenaltySeconds);
       }
       if (!e.bulletBonused) {
         state.bulletBudget += state.bulletBonusSeconds;
         e.bulletBonused = true;
+        floatBulletDelta(+state.bulletBonusSeconds);
       }
     }
   }
+}
+
+// Float a "+5" / "−30" indicator above the big-top timer for ~1s.
+// High-motion bullet only — the inline stat-time slot used in lower
+// motion modes already reflects the budget change directly.
+function floatBulletDelta(seconds) {
+  if (seconds === 0) return;
+  if (state.mode !== 'bullet') return;
+  if (state.motionMode !== 'high') return;
+  if (compTimerEl.hidden) return;
+  const rect = compTimerEl.getBoundingClientRect();
+  if (rect.width === 0) return;
+  const float = document.createElement('div');
+  float.className = 'bullet-float ' + (seconds > 0 ? 'positive' : 'negative');
+  float.textContent = (seconds > 0 ? '+' : '−') + Math.abs(seconds);
+  float.style.left = (rect.left + rect.width / 2) + 'px';
+  float.style.top = (rect.bottom + 2) + 'px';
+  document.body.appendChild(float);
+  setTimeout(() => float.remove(), 1200);
 }
 
 function endBullet() {
