@@ -458,11 +458,9 @@ practiceLookaheadInput.addEventListener('input', () => {
 
 function renderLookaheadLabel() {
   const v = state.practiceLookahead | 0;
-  const labelEl = practiceLookaheadSetting && practiceLookaheadSetting.querySelector('label');
+  const labelEl = document.getElementById('practice-lookahead-label');
   if (labelEl) {
-    labelEl.innerHTML = v > 0
-      ? 'Auto-check after <strong>' + v + '</strong> pending'
-      : 'Auto-check after &mdash; pending';
+    labelEl.textContent = v > 0 ? (v + ' digit' + (v === 1 ? '' : 's')) : 'off';
   }
 }
 
