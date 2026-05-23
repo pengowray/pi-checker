@@ -260,6 +260,58 @@ test('skipped tile click opens the skip dialog', async ({ page }) => {
   await expect(page.locator('#skip-modal')).toBeVisible();
 });
 
+// ---- Accounting buckets (correct / wrong / missed / skipped / fixed) ----
+//
+// Each test exercises one stat tile so a regression in computeStatuses,
+// correctedPositions, or the render-time counter is caught here rather
+// than via downstream UI bugs.
+
+test('wrong: a single wrong digit increments stat-wrong', async ({ page }) => {
+  // Pi[0] is '1'; typing '2' is unambiguously wrong.
+  await page.keyboard.type('2');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+});
+
+test('missed: a skipped-over digit is detected via lookahead and counted', async ({ page }) => {
+  // Pi = 1 4 1 5 9 2 …  Typing "1592" jumps over "41": the "5" entry
+  // resolves as correct-with-2-missed (lookahead confirms "92" matches),
+  // so missedBefore=['4','1'] on that entry.
+  await page.keyboard.type('1592');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('4');
+  await expect(page.locator('#stat-missed')).toHaveText('2');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('fixed: wrong → backspace → correct re-type counts as fixed', async ({ page }) => {
+  await page.keyboard.type('2');           // wrong at pi[0]
+  await page.keyboard.press('Enter');      // force-check so backspace records the position
+  await page.keyboard.press('Backspace');  // erases the wrong entry, marks position as corrected
+  await page.keyboard.type('1');           // correct re-type at the same position
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-fixed')).toHaveText('1');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('fixed: wrong → backspace → skip onto the same position counts as fixed, not skipped', async ({ page }) => {
+  await page.keyboard.type('2');           // wrong at pi[0]
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('v');          // "v" skips one digit (lands on the now-corrected position)
+  await expect(page.locator('#stat-fixed')).toHaveText('1');
+  await expect(page.locator('#stat-skipped')).toHaveText('—');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  // Visual: digit carries both classes so it stays skipped-gray with the
+  // corrected dotted underline.
+  const cls = await page.locator('#user-digits .digit').first().getAttribute('class');
+  expect(cls).toMatch(/\bskipped\b/);
+  expect(cls).toMatch(/\bcorrected\b/);
+});
+
 // ---- Per-digit vs on-idle auto-check ----
 
 async function setAutoCheckSeconds(page, seconds) {
