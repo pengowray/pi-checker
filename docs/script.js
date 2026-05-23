@@ -1640,7 +1640,7 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
   if (e.checked) {
     let cls = 'digit ' + e.status;
     if (e.skipped) cls += ' skipped';
-    else if (e.corrected && e.status === 'correct') cls += ' corrected';
+    if (e.corrected && e.status === 'correct') cls += ' corrected';
     const showDiff = ((ctx.inSprint && ctx.sprintEnded) || ctx.inPracticeAnnot)
       && e.status === 'wrong' && e.expected;
     const showMask = ctx.inSprint && !ctx.sprintEnded && e.status === 'wrong';
@@ -1835,8 +1835,8 @@ function render() {
     if (e.checked) {
       missed += e.missedBefore.length;
       if (e.status === 'correct') {
-        if (e.skipped) skipped += 1;
-        else if (e.corrected) fixed += 1;
+        if (e.corrected) fixed += 1;
+        else if (e.skipped) skipped += 1;
         else correct += 1;
       } else if (e.status === 'wrong') {
         wrong += 1;
@@ -2554,8 +2554,8 @@ function openBulletScoreModal() {
     if (!e.checked) continue;
     missed += e.missedBefore.length;
     if (e.status === 'correct') {
-      if (e.skipped) { /* skipped: don't count */ }
-      else if (e.corrected) fixed += 1;
+      if (e.corrected) fixed += 1;
+      else if (e.skipped) { /* skipped: don't count */ }
       else correct += 1;
     } else if (e.status === 'wrong') {
       wrong += 1;
