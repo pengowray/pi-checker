@@ -1611,7 +1611,34 @@ let renderCache = [];
 // lazily and shared across renders; only the entry's own nodes are
 // touched on incremental updates.
 let groupElements = [];
+// Group that currently holds .group-pad spacer spans (and the cursor moved
+// inside it). Tracked so we can strip stale padding at the start of the next
+// render without iterating every group.
+let lastPaddedGroup = null;
 let lastRenderContextKey = '';
+
+// Pad the active (partial) group with invisible NBSP spacers so it reserves
+// the full visual width of a complete group. The cursor is moved inside the
+// active group right after the typed digits so it stays next to the last
+// typed digit — the padding sits between the cursor and the group's right
+// edge, which is what triggers an earlier wrap when the line is full.
+function applyActivePadding(gs, displayedPi) {
+  if (gs <= 0 || displayedPi === 0) return;
+  const inGroup = displayedPi % gs;
+  if (inGroup === 0) return; // last group is exactly full — no padding
+  const padCount = gs - inGroup;
+  const lastGroupIdx = Math.floor((displayedPi - 1) / gs);
+  const lastGroup = groupElements[lastGroupIdx];
+  if (!lastGroup) return;
+  lastGroup.appendChild(cursorEl);
+  for (let k = 0; k < padCount; k++) {
+    const pad = document.createElement('span');
+    pad.className = 'group-pad';
+    pad.textContent = ' ';
+    lastGroup.appendChild(pad);
+  }
+  lastPaddedGroup = lastGroup;
+}
 
 // A literal " " inside an inline-block can collapse to near-zero width in
 // some browsers, so spaces are rendered as NBSP and given an explicit
@@ -1707,6 +1734,21 @@ function computeEntryFingerprint(e, ctx, hasPrimeAfter) {
 }
 
 function render() {
+  // Move the cursor out of any group it was placed inside on the previous
+  // render — the group may be about to be torn down (ctx wipe or trailing-
+  // group trim) and would take the cursor with it. Also strip any stale
+  // .group-pad spacers from the previously-padded group; they're re-added
+  // at the end against the now-current active group.
+  const piBodyEl = userDigitsEl.parentNode;
+  if (cursorEl.parentNode !== piBodyEl) {
+    piBodyEl.insertBefore(cursorEl, userDigitsEl.nextSibling);
+  }
+  if (lastPaddedGroup && lastPaddedGroup.isConnected) {
+    const pads = lastPaddedGroup.querySelectorAll(':scope > .group-pad');
+    for (const p of pads) p.remove();
+  }
+  lastPaddedGroup = null;
+
   const def = SEQUENCES[state.sequenceId];
   // Sequences with their own natural spacing (e.g. primes) override the
   // user-selected grouping — the prime boundaries are the grouping.
@@ -1859,6 +1901,8 @@ function render() {
     }
     groupElements.length = lastGroupIdx + 1;
   }
+
+  applyActivePadding(gs, displayedPi);
 
   piDisplayEl.classList.toggle('grouped', gs > 0);
   piDisplayEl.classList.toggle('diff-mode',
