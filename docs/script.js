@@ -319,9 +319,12 @@ function defaultMotionMode() {
 // fires first). Keep this in sync with MODE_FIXED_DELAY.sprint.
 const SPRINT_PER_DIGIT_SECONDS = 30;
 const SPRINT_LOOKAHEAD = 10;
-// Practice-mode lookahead default: 0 disables the lookahead-based
-// auto-check (the per-digit / on-idle timer is the only trigger).
-const DEFAULT_PRACTICE_LOOKAHEAD = 0;
+// Practice-mode lookahead default: -1 means "∞ / off" — the lookahead-based
+// auto-check never fires (the per-digit / on-idle timer is the only trigger).
+// Valid values: -1 (off) or 1..20 (max pending entries before oldest auto-checks).
+const DEFAULT_PRACTICE_LOOKAHEAD = -1;
+// Slider position that represents the ∞/off state (one past the numeric max of 20).
+const PRACTICE_LOOKAHEAD_OFF_SLIDER = 21;
 // Bullet defaults: 60s starting bank, +5s per correct, -30s per wrong.
 const DEFAULT_BULLET_START = 60;
 const DEFAULT_BULLET_BONUS = 5;
@@ -563,8 +566,14 @@ function applyBulletInputs(persist = true) {
 });
 
 // ---- Practice lookahead slider ----
+// Slider goes 1..20 then PRACTICE_LOOKAHEAD_OFF_SLIDER (=21) for ∞/off.
+// State stores 1..20 or -1 (off). 0 is not used.
+function lookaheadStateToSlider(v) {
+  return (v >= 1 && v <= 20) ? v : PRACTICE_LOOKAHEAD_OFF_SLIDER;
+}
 practiceLookaheadInput.addEventListener('input', () => {
-  const v = parseInt(practiceLookaheadInput.value, 10) || 0;
+  const raw = parseInt(practiceLookaheadInput.value, 10);
+  const v = (isNaN(raw) || raw >= PRACTICE_LOOKAHEAD_OFF_SLIDER) ? -1 : raw;
   state.practiceLookahead = v;
   localStorage.setItem(STORAGE_KEYS.practiceLookahead, String(v));
   renderLookaheadLabel();
@@ -577,7 +586,7 @@ function renderLookaheadLabel() {
   const v = state.practiceLookahead | 0;
   const labelEl = document.getElementById('practice-lookahead-label');
   if (labelEl) {
-    labelEl.textContent = v > 0 ? (v + ' digit' + (v === 1 ? '' : 's')) : 'off';
+    labelEl.textContent = v >= 1 ? (v + ' digit' + (v === 1 ? '' : 's')) : '∞';
   }
 }
 
@@ -2447,7 +2456,7 @@ resetBtns.forEach(btn => {
       render();
     } else if (target === 'practice-lookahead') {
       state.practiceLookahead = DEFAULT_PRACTICE_LOOKAHEAD;
-      practiceLookaheadInput.value = String(DEFAULT_PRACTICE_LOOKAHEAD);
+      practiceLookaheadInput.value = String(lookaheadStateToSlider(DEFAULT_PRACTICE_LOOKAHEAD));
       localStorage.setItem(STORAGE_KEYS.practiceLookahead, String(DEFAULT_PRACTICE_LOOKAHEAD));
       renderLookaheadLabel();
       updateResetVisibility();
@@ -2753,9 +2762,15 @@ function loadPersistedSettings() {
   const savedHideKeypad = localStorage.getItem(STORAGE_KEYS.hideKeypad);
   applyHideKeypad(savedHideKeypad === '1', false);
   const savedLookahead = parseInt(localStorage.getItem(STORAGE_KEYS.practiceLookahead), 10);
-  if (!isNaN(savedLookahead) && savedLookahead >= 0 && savedLookahead <= 20) {
+  if (savedLookahead === -1) {
+    state.practiceLookahead = -1;
+    practiceLookaheadInput.value = String(PRACTICE_LOOKAHEAD_OFF_SLIDER);
+  } else if (!isNaN(savedLookahead) && savedLookahead >= 1 && savedLookahead <= 20) {
     state.practiceLookahead = savedLookahead;
     practiceLookaheadInput.value = String(savedLookahead);
+  } else {
+    // No saved value, or legacy 0 (now unused) — fall back to default (∞/off).
+    practiceLookaheadInput.value = String(lookaheadStateToSlider(state.practiceLookahead));
   }
   renderLookaheadLabel();
   // Bullet timing.
