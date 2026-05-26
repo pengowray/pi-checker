@@ -465,11 +465,27 @@ input[type="range"]:disabled {
 /* Transparent spacer used inside the active (partial) group so it reserves
    the same width as a full group — partial trailing groups then wrap to a
    new line at the same column as a full group would, rather than dangling
-   a stub on the previous line. */
+   a stub on the previous line. inline-block so letter-spacing across an
+   NBSP pad matches the letter-spacing across a real digit inline-block
+   (Firefox treats the two boundaries slightly differently). */
 .pi-display.grouped .group-pad {
+  display: inline-block;
   color: transparent;
   user-select: none;
   pointer-events: none;
+}
+
+/* The cursor normally sits between the prefix/digits and the next typing
+   slot, contributing ~1ch + margin of layout width. While it's inside a
+   partial group, that extra width pushes the group past a full group's
+   width — at certain zooms the partial group then wraps to a new line,
+   only to pop back once enough digits are typed and the cursor moves
+   out. Pull the cursor out of layout flow while it's inside a group; its
+   glyph still renders via overflow: visible. */
+.pi-display.grouped .group > .cursor {
+  width: 0;
+  margin: 0;
+  overflow: visible;
 }
 
 .prefix {

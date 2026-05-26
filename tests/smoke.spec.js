@@ -312,6 +312,37 @@ test('fixed: wrong → backspace → skip onto the same position counts as fixed
   expect(cls).toMatch(/\bcorrected\b/);
 });
 
+// ---- Group padding ----
+
+test('grouped: partial group reserves the same width as a complete group', async ({ page }) => {
+  // Regression: the cursor lives inside the partial group and was
+  // contributing ~1ch of layout width on top of the NBSP pads, so the
+  // partial group was wider than the complete group it grows into. At
+  // certain zoom levels that pushed the group past a wrap point and made
+  // it jump to the next line, then jump back once enough digits filled
+  // in to evict the cursor.
+  await page.locator('#settings-toggle').click();
+  await page.locator('#group-size').selectOption('6');
+  await page.locator('#settings-close').click();
+
+  // Two digits into a fresh group — the rest is pad+cursor.
+  await page.keyboard.type('14');
+  const partialWidth = await page.evaluate(() => {
+    const group = document.querySelector('#user-digits .group');
+    return group.getBoundingClientRect().width;
+  });
+
+  // Fill the group out.
+  await page.keyboard.type('1592');
+  const fullWidth = await page.evaluate(() => {
+    const group = document.querySelector('#user-digits .group');
+    return group.getBoundingClientRect().width;
+  });
+
+  // The two should agree to within sub-pixel rounding.
+  expect(Math.abs(partialWidth - fullWidth)).toBeLessThan(1);
+});
+
 // ---- Undo / redo ----
 
 test('Ctrl+Z undoes the last typed digit, same as backspace', async ({ page }) => {
