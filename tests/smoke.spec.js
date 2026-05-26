@@ -371,6 +371,44 @@ test('Ctrl+Shift+Z also redoes', async ({ page }) => {
   expect(chars).toEqual(['1', '4']);
 });
 
+test('mobile-input: 4+ chars at once route through paste (counted as skipped)', async ({ page }) => {
+  // Simulate a mobile keyboard / autofill / macro that delivers the whole
+  // string in one input event. The threshold (≥4) treats it as a paste.
+  await page.evaluate(() => {
+    const el = document.getElementById('mobile-input');
+    el.value = '1415';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#user-digits .digit')).toHaveCount(4);
+  await expect(page.locator('#stat-skipped')).toHaveText('4');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+});
+
+test('mobile-input: 3 chars at once still count as keystrokes, not paste', async ({ page }) => {
+  // Below the threshold — charitable to the fast-typer / double-tap case.
+  await page.evaluate(() => {
+    const el = document.getElementById('mobile-input');
+    el.value = '141';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#user-digits .digit')).toHaveCount(3);
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await expect(page.locator('#stat-skipped')).toHaveText('—');
+});
+
+test('mobile-input: a 4+ char delivery is one undo unit', async ({ page }) => {
+  // Multi-char delivery should be undone in one Ctrl+Z, same as a paste.
+  await page.evaluate(() => {
+    const el = document.getElementById('mobile-input');
+    el.value = '14159';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await expect(page.locator('#user-digits .digit')).toHaveCount(5);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#user-digits .digit')).toHaveCount(0);
+});
+
 test('a new keystroke after undo clears the redo stack', async ({ page }) => {
   await page.keyboard.type('14');
   await page.keyboard.press('Control+z'); // entries = "1"

@@ -2413,9 +2413,17 @@ if (mobileInputEl) {
     const text = mobileInputEl.value;
     if (!text) return;
     mobileInputEl.value = '';
-    // Spaces / typed text outside the alphabet are filtered inside
-    // inputDigit, so we don't need to pre-filter here.
-    for (const c of text) inputDigit(c);
+    // Mobile keyboards / autofill / macros can deliver multiple chars in
+    // a single input event. ≥4 chars at once is almost certainly a paste
+    // or autofill — route through inputPaste so the digits are recorded
+    // as a single undo unit and scored as skipped (same as desktop paste).
+    // Under 4: charitable benefit-of-the-doubt that it's just a fast typer
+    // or a quick double-tap, so treat each char as a keystroke.
+    if (text.length >= 4) {
+      inputPaste(text);
+    } else {
+      for (const c of text) inputDigit(c);
+    }
   });
   mobileInputEl.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
