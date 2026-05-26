@@ -312,6 +312,65 @@ test('fixed: wrong → backspace → skip onto the same position counts as fixed
   expect(cls).toMatch(/\bcorrected\b/);
 });
 
+// ---- Subtitle (pi-day swap) ----
+
+// Stub Date.now() before the app's init runs so applyPiDaySubtitle reads
+// the fake clock. Playwright's addInitScript runs after the navigation
+// commits but before any page scripts, so it lands before script.js's
+// init block at the bottom of the file.
+async function withFakeDate(page, isoString) {
+  const epoch = Date.parse(isoString);
+  await page.addInitScript((ms) => {
+    const RealDate = Date;
+    function FakeDate(...args) {
+      if (args.length === 0) return new RealDate(ms);
+      return new RealDate(...args);
+    }
+    FakeDate.now = () => ms;
+    FakeDate.parse = RealDate.parse;
+    FakeDate.UTC = RealDate.UTC;
+    FakeDate.prototype = RealDate.prototype;
+    // eslint-disable-next-line no-global-assign
+    Date = FakeDate;
+  }, epoch);
+  await page.goto('/');
+}
+
+test('subtitle: default text reads "remember today"', async ({ page }) => {
+  // Mid-July — definitely not pi day in any timezone.
+  await withFakeDate(page, '2025-07-15T12:00:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('How many digits can you remember today?');
+});
+
+test('subtitle: pi day in UTC swaps to the greeting', async ({ page }) => {
+  await withFakeDate(page, '2025-03-14T12:00:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('Happy pi day!');
+});
+
+test('subtitle: still pi day if UTC+12 has just rolled into March 14', async ({ page }) => {
+  // UTC March 13, 12:01 → UTC+12 is March 14, 00:01. Pi day in Kiribati.
+  await withFakeDate(page, '2025-03-13T12:01:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('Happy pi day!');
+});
+
+test('subtitle: still pi day if UTC-12 has not yet rolled out of March 14', async ({ page }) => {
+  // UTC March 15, 11:59 → UTC-12 is March 14, 23:59. Still pi day in Baker Island.
+  await withFakeDate(page, '2025-03-15T11:59:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('Happy pi day!');
+});
+
+test('subtitle: NOT pi day once UTC+12 has not yet hit March 14', async ({ page }) => {
+  // UTC March 13, 11:59 → UTC+12 is March 13, 23:59. Pi day is one minute away.
+  await withFakeDate(page, '2025-03-13T11:59:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('How many digits can you remember today?');
+});
+
+test('subtitle: NOT pi day once UTC-12 has just rolled out of March 14', async ({ page }) => {
+  // UTC March 15, 12:01 → UTC-12 is March 15, 00:01. Pi day just ended everywhere.
+  await withFakeDate(page, '2025-03-15T12:01:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('How many digits can you remember today?');
+});
+
 // ---- Group padding ----
 
 test('grouped: partial group reserves the same width as a complete group', async ({ page }) => {

@@ -2891,10 +2891,29 @@ function loadPersistedSettings() {
   }
 }
 
+// ---- Pi day subtitle ----
+// True if it's March 14 anywhere on Earth (UTC-12 through UTC+12). The
+// window spans 48 UTC hours: starts when UTC+12 ticks into March 14 and
+// ends when UTC-12 ticks out of it.
+function isPiDayAnywhere() {
+  const now = Date.now();
+  for (let offset = -12; offset <= 12; offset++) {
+    const t = new Date(now + offset * 3600 * 1000);
+    if (t.getUTCMonth() === 2 && t.getUTCDate() === 14) return true;
+  }
+  return false;
+}
+
+function applyPiDaySubtitle() {
+  const el = document.getElementById('subtitle');
+  if (el && isPiDayAnywhere()) el.textContent = 'Happy pi day!';
+}
+
 // ---- Init ----
 loadPersistedSettings();
 applySequence('pi'); // also triggers loadLong('pi') via applySequence
 applyModeDefaults();
 updateModeHint();
 updateResetVisibility();
+applyPiDaySubtitle();
 render();
