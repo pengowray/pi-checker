@@ -390,7 +390,19 @@ const state = {
   // The per-entry refund path still fires for missed-detection rescoring
   // because that's gated on e.bulletPenalized, not position.
   bulletMaxScoredPos: -1,
+  // Undo/redo: each op records the text inserted and the entries.length
+  // snapshot before it was applied. Undo replays backspace down to that
+  // snapshot so bookkeeping (correctedPositions, erasedErrors, bullet
+  // penalty locks) fires the same way as a manual delete. Redo re-runs
+  // inputDigit/inputPaste so re-typed digits are scored fresh.
+  undoStack: [],
+  redoStack: [],
 };
+
+// True while undo() or redo() is replaying an op — suppresses the
+// undo-stack trim and redo-stack clear inside backspace / inputDigit /
+// inputPaste so the replay can mutate entries without wiping history.
+let isApplyingHistory = false;
 
 // In-memory only (not persisted): the last "Skip N" value the user entered.
 let lastSkipAmount = 50;
@@ -873,6 +885,8 @@ function clearSession() {
   state.bulletFrozenAt = 0;
   state.bulletPenalizedPositions.clear();
   state.bulletMaxScoredPos = -1;
+  state.undoStack.length = 0;
+  state.redoStack.length = 0;
 }
 
 function applyModeDefaults() {
@@ -1181,7 +1195,10 @@ function inputDigit(d) {
     autoCheckStartedAt: null,
     _timerId: null,
   };
+  const entriesLengthBefore = state.entries.length;
   state.entries.push(entry);
+  state.undoStack.push({ entriesLengthBefore, text: d, wasPaste: false });
+  if (!isApplyingHistory) state.redoStack.length = 0;
   computeStatuses(state.entries.length - 1);
   if (useOnIdleAutoCheck()) {
     resetAutoCheckTimer();
@@ -1241,6 +1258,7 @@ function inputPaste(text) {
     return;
   }
 
+  const entriesLengthBefore = state.entries.length;
   const firstNewIdx = state.entries.length;
   for (let k = startIdx; k < digits.length; k++) {
     const t = state.startTime === null ? null : (performance.now() - state.startTime);
@@ -1254,6 +1272,8 @@ function inputPaste(text) {
       missedBefore: [],
     });
   }
+  state.undoStack.push({ entriesLengthBefore, text: text, wasPaste: true });
+  if (!isApplyingHistory) state.redoStack.length = 0;
 
   computeStatuses(firstNewIdx);
   applyBulletScoring();
@@ -1314,6 +1334,16 @@ function backspace() {
     popped._timerId = null;
   }
   if (state.entries.length === 0) state.integerCharsConsumed = 0;
+  if (!isApplyingHistory) {
+    // Drop any undo op whose "insert started at length N" anchor is now
+    // out of reach. Without this, a later Ctrl-Z would try to backspace
+    // down to a snapshot the user has already passed.
+    while (state.undoStack.length > 0 &&
+           state.undoStack[state.undoStack.length - 1].entriesLengthBefore >= state.entries.length) {
+      state.undoStack.pop();
+    }
+    state.redoStack.length = 0;
+  }
   // After popping the tail, lookahead-affected entries are within the
   // last 3 positions; pass the new length-1 so we resume from there.
   computeStatuses(Math.max(0, state.entries.length - 1));
@@ -1324,6 +1354,43 @@ function backspace() {
   }
   applyBulletScoring();
   render();
+}
+
+function undo() {
+  if (isInputLocked()) return;
+  if (state.mode === 'hardcore') return;
+  if (state.undoStack.length === 0) return;
+  const op = state.undoStack.pop();
+  isApplyingHistory = true;
+  while (state.entries.length > op.entriesLengthBefore) {
+    const before = state.entries.length;
+    backspace();
+    if (state.entries.length === before) {
+      // Backspace was blocked (e.g. sprint won't erase checked-wrong/
+      // skipped). Restore the op so a later retry still works; the
+      // entries we did pop stay popped, matching what a manual
+      // backspace string would have done.
+      isApplyingHistory = false;
+      state.undoStack.push(op);
+      return;
+    }
+  }
+  isApplyingHistory = false;
+  state.redoStack.push(op);
+}
+
+function redo() {
+  if (isInputLocked()) return;
+  if (state.mode === 'hardcore') return;
+  if (state.redoStack.length === 0) return;
+  const op = state.redoStack.pop();
+  isApplyingHistory = true;
+  if (op.wasPaste) {
+    inputPaste(op.text);
+  } else {
+    inputDigit(op.text);
+  }
+  isApplyingHistory = false;
 }
 
 function forceCheck() {
@@ -2232,6 +2299,20 @@ document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
   if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
 
+  // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z and Ctrl+Y = redo. Handled before
+  // the modifier early-return below so the browser's default (which is
+  // useless here — there's no focused editable) doesn't run instead.
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+    if (e.shiftKey) redo(); else undo();
+    e.preventDefault();
+    return;
+  }
+  if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'y' || e.key === 'Y')) {
+    redo();
+    e.preventDefault();
+    return;
+  }
+
   // Let the browser handle Ctrl/Cmd/Alt combos (copy, paste, select-all,
   // browser shortcuts). Without this we'd swallow Ctrl+C as "C" in hex mode,
   // Ctrl+A as "A", etc. Shift is fine — keys get uppercased anyway.
@@ -2337,6 +2418,16 @@ if (mobileInputEl) {
     for (const c of text) inputDigit(c);
   });
   mobileInputEl.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 'z' || e.key === 'Z')) {
+      if (e.shiftKey) redo(); else undo();
+      e.preventDefault();
+      return;
+    }
+    if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'y' || e.key === 'Y')) {
+      redo();
+      e.preventDefault();
+      return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.key === 'Backspace') {
       backspace();

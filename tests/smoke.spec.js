@@ -312,6 +312,75 @@ test('fixed: wrong → backspace → skip onto the same position counts as fixed
   expect(cls).toMatch(/\bcorrected\b/);
 });
 
+// ---- Undo / redo ----
+
+test('Ctrl+Z undoes the last typed digit, same as backspace', async ({ page }) => {
+  await page.keyboard.type('14');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#user-digits .digit')).toHaveCount(2);
+  await page.keyboard.press('Control+z');
+  // The "4" should be gone; "1" remains.
+  const chars = await page.$$eval('#user-digits .digit', els =>
+    els.map(e => e.textContent));
+  expect(chars).toEqual(['1']);
+});
+
+test('Ctrl+Z after paste removes every pasted digit in one shot', async ({ page }) => {
+  // Paste via the dispatched ClipboardEvent path the perf test already uses.
+  await page.evaluate(() => {
+    const dt = new DataTransfer();
+    dt.setData('text', '14159');
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+  });
+  await expect(page.locator('#user-digits .digit')).toHaveCount(5);
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#user-digits .digit')).toHaveCount(0);
+});
+
+test('undo then retype-correct still counts as "fixed" (same as backspace+retype)', async ({ page }) => {
+  // Mirrors the "wrong → backspace → correct" test, but using Ctrl+Z
+  // instead of Backspace. The user's invariant: undo of a delete-able
+  // edit must leave the same bookkeeping behind, so re-typing correctly
+  // marks the position as fixed.
+  await page.keyboard.type('2');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.type('1');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-fixed')).toHaveText('1');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('Ctrl+Y redoes the last undone digit', async ({ page }) => {
+  await page.keyboard.type('14');
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#user-digits .digit')).toHaveCount(1);
+  await page.keyboard.press('Control+y');
+  const chars = await page.$$eval('#user-digits .digit', els =>
+    els.map(e => e.textContent));
+  expect(chars).toEqual(['1', '4']);
+});
+
+test('Ctrl+Shift+Z also redoes', async ({ page }) => {
+  await page.keyboard.type('14');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+Shift+z');
+  const chars = await page.$$eval('#user-digits .digit', els =>
+    els.map(e => e.textContent));
+  expect(chars).toEqual(['1', '4']);
+});
+
+test('a new keystroke after undo clears the redo stack', async ({ page }) => {
+  await page.keyboard.type('14');
+  await page.keyboard.press('Control+z'); // entries = "1"
+  await page.keyboard.type('5');           // entries = "15", redo cleared
+  await page.keyboard.press('Control+y');  // should be a no-op
+  const chars = await page.$$eval('#user-digits .digit', els =>
+    els.map(e => e.textContent));
+  expect(chars).toEqual(['1', '5']);
+});
+
 // ---- Per-digit vs on-idle auto-check ----
 
 async function setAutoCheckSeconds(page, seconds) {
