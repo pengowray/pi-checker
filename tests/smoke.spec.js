@@ -409,6 +409,23 @@ test('mobile-input: a 4+ char delivery is one undo unit', async ({ page }) => {
   await expect(page.locator('#user-digits .digit')).toHaveCount(0);
 });
 
+test('Ctrl+Z while focused in a settings field does not touch pi state', async ({ page }) => {
+  // Type some pi digits, then focus the skip-count box and press Ctrl+Z.
+  // Our handler must defer to the browser's native textbox undo — the
+  // pi entries should be untouched.
+  await page.keyboard.type('1415');
+  await page.locator('#stat-skipped-tile').click();
+  await expect(page.locator('#skip-modal')).toBeVisible();
+  const skipBox = page.locator('#skip-count');
+  await skipBox.focus();
+  await skipBox.fill('77');
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Control+Shift+z');
+  await page.keyboard.press('Control+y');
+  // Pi state untouched — still 4 entries.
+  await expect(page.locator('#user-digits .digit')).toHaveCount(4);
+});
+
 test('a new keystroke after undo clears the redo stack', async ({ page }) => {
   await page.keyboard.type('14');
   await page.keyboard.press('Control+z'); // entries = "1"
