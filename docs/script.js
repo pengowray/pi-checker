@@ -278,7 +278,7 @@ deriveTau();
 // scoring needs the digit's correct/wrong status resolved immediately
 // so the budget reflects each keystroke.
 const MODE_FIXED_DELAY = { sprint: 30, hardcore: 0, bullet: 0 };
-const DEFAULT_PRACTICE_DELAY = 2;
+const DEFAULT_PRACTICE_DELAY = 5;
 const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
@@ -319,10 +319,10 @@ function defaultMotionMode() {
 // fires first). Keep this in sync with MODE_FIXED_DELAY.sprint.
 const SPRINT_PER_DIGIT_SECONDS = 30;
 const SPRINT_LOOKAHEAD = 10;
-// Practice-mode lookahead default: -1 means "∞ / off" — the lookahead-based
-// auto-check never fires (the per-digit / on-idle timer is the only trigger).
-// Valid values: -1 (off) or 1..20 (max pending entries before oldest auto-checks).
-const DEFAULT_PRACTICE_LOOKAHEAD = -1;
+// Practice-mode lookahead default: max 2 pending entries before the oldest
+// auto-checks. -1 means "∞ / off" (the per-digit / on-idle timer is the only
+// trigger). Valid values: -1 (off) or 1..20.
+const DEFAULT_PRACTICE_LOOKAHEAD = 2;
 // Slider position that represents the ∞/off state (one past the numeric max of 20).
 const PRACTICE_LOOKAHEAD_OFF_SLIDER = 21;
 // Bullet defaults: 60s starting bank, +5s per correct, -30s per wrong.
@@ -925,7 +925,7 @@ function updateModeBadge() {
   else {
     delayText = state.autoCheckSeconds + 's auto-check';
     if (state.mode === 'practice' && state.practiceLookahead > 0) {
-      delayText += ', +' + state.practiceLookahead;
+      delayText += ', −' + state.practiceLookahead;
     }
   }
   modeBadge.textContent = modeName + ' · ' + delayText;
