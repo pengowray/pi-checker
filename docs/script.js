@@ -204,6 +204,21 @@ const SEQUENCES = {
     digits: '',
     naturalSpaces: true,
   },
+  // ♥ Easter egg: any number that starts with "2." is less than 3, so every
+  // digit you type is accepted as correct (see acceptAny in computeStatuses).
+  // The "true" digits revealed by Skip are all 9s — 2.999… is the value that
+  // creeps up on 3 without ever quite reaching it.
+  'less-than-3': {
+    label: '< 3',
+    shortLabel: '< 3',
+    hintLabel: 'a number less than 3',
+    titleHtml: '&lt;3 Checker',
+    integerPart: '2',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    acceptAny: true,
+    digits: '',          // filled by setupLessThan3()
+  },
 };
 
 // Pull in the bundled secondary sequences (short fallbacks)
@@ -272,6 +287,13 @@ deriveTau();
   SEQUENCES.champernowne.digits = out;
 })();
 
+(function setupLessThan3() {
+  // 2.999999… — the supremum of the open interval, sneaking up on 3 but
+  // never reaching it. Content only surfaces via Skip; acceptAny makes the
+  // actual digit irrelevant for scoring, so every typed digit lands correct.
+  SEQUENCES['less-than-3'].digits = '9'.repeat(10000);
+})();
+
 // ---- Constants ----
 // Sprint uses per-digit auto-check at SPRINT_PER_DIGIT_SECONDS
 // (defined below). Hardcore and Bullet are instant (0) — bullet's
@@ -336,6 +358,7 @@ const state = {
   integerPart: SEQUENCES.pi.integerPart,
   alphabet: SEQUENCES.pi.alphabet,
   keypadType: SEQUENCES.pi.keypadType,
+  acceptAny: !!SEQUENCES.pi.acceptAny, // <3 mode: every typed digit counts as correct
   integerCharsConsumed: 0, // how many leading integer-part chars the user has typed
   mode: 'practice',
   autoCheckSeconds: DEFAULT_PRACTICE_DELAY,
@@ -702,6 +725,7 @@ function applySequence(id) {
   state.integerPart = def.integerPart;
   state.alphabet = def.alphabet;
   state.keypadType = def.keypadType;
+  state.acceptAny = !!def.acceptAny;
   state.integerCharsConsumed = 0;
   const prefixText = def.prefix != null
     ? def.prefix
@@ -1608,7 +1632,9 @@ function computeStatuses(fromIdx = 0) {
       continue;
     }
 
-    if (e.char === digits[seqIdx]) {
+    // acceptAny (<3 mode): any number starting "2." is below 3, so whatever
+    // digit lands here is correct. Bypass the skip/missed detection entirely.
+    if (state.acceptAny || e.char === digits[seqIdx]) {
       e.status = 'correct';
       e.expected = digits[seqIdx];
       e.corrected = state.correctedPositions.has(seqIdx);

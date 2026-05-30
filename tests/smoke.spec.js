@@ -25,7 +25,22 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
     'pi', 'tau', 'pi-squared', 'zeta2', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
     'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
+    'less-than-3',
   ]);
+});
+
+test('less-than-3: any digits are accepted as correct', async ({ page }) => {
+  await setSequence(page, 'less-than-3');
+  // Prefix is "2." and the title plays it straight as a checker.
+  await expect(page.locator('#prefix')).toContainText('2.');
+  await expect(page.locator('#app-title')).toContainText('<3');
+  // A leading "2" is absorbed by the prefix (like "3" for pi); the rest are
+  // arbitrary digits that would be wrong for any real constant.
+  await page.keyboard.type('2748159');
+  await page.keyboard.press('Enter');
+  // Leading "2" is absorbed by the prefix; the other six land as correct.
+  await expect(page.locator('#stat-correct')).toHaveText('6');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('pi: typing the first digits scores correct', async ({ page }) => {
