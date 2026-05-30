@@ -2892,21 +2892,24 @@ function loadPersistedSettings() {
 }
 
 // ---- Pi day subtitle ----
-// True if it's March 14 anywhere on Earth (UTC-12 through UTC+12). The
-// window spans 48 UTC hours: starts when UTC+12 ticks into March 14 and
-// ends when UTC-12 ticks out of it.
-function isPiDayAnywhere() {
+// True if the given month/date is current anywhere on Earth (UTC-12 through
+// UTC+12). The window spans 48 UTC hours: it starts when UTC+12 ticks into
+// the date and ends when UTC-12 ticks out of it.
+function isDateAnywhere(month, date) {
   const now = Date.now();
   for (let offset = -12; offset <= 12; offset++) {
     const t = new Date(now + offset * 3600 * 1000);
-    if (t.getUTCMonth() === 2 && t.getUTCDate() === 14) return true;
+    if (t.getUTCMonth() === month && t.getUTCDate() === date) return true;
   }
   return false;
 }
 
 function applyPiDaySubtitle() {
   const el = document.getElementById('subtitle');
-  if (el && isPiDayAnywhere()) el.textContent = 'Happy pi day!';
+  if (!el) return;
+  // March 14 (3/14) → Pi Day. July 22 (22/7) → Pi Approximation Day.
+  if (isDateAnywhere(2, 14)) el.textContent = 'Happy pi day!';
+  else if (isDateAnywhere(6, 22)) el.textContent = 'Happy Pi Approximation Day!';
 }
 
 // ---- Init ----

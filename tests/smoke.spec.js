@@ -371,6 +371,35 @@ test('subtitle: NOT pi day once UTC-12 has just rolled out of March 14', async (
   await expect(page.locator('#subtitle')).toHaveText('How many digits can you remember today?');
 });
 
+test('subtitle: July 22 in UTC swaps to the approximation greeting', async ({ page }) => {
+  await withFakeDate(page, '2025-07-22T12:00:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('Happy Pi Approximation Day!');
+});
+
+test('subtitle: still approximation day if UTC+12 has just rolled into July 22', async ({ page }) => {
+  // UTC July 21, 12:01 → UTC+12 is July 22, 00:01. Approximation day in Kiribati.
+  await withFakeDate(page, '2025-07-21T12:01:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('Happy Pi Approximation Day!');
+});
+
+test('subtitle: still approximation day if UTC-12 has not yet rolled out of July 22', async ({ page }) => {
+  // UTC July 23, 11:59 → UTC-12 is July 22, 23:59. Still approximation day in Baker Island.
+  await withFakeDate(page, '2025-07-23T11:59:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('Happy Pi Approximation Day!');
+});
+
+test('subtitle: NOT approximation day until UTC+12 hits July 22', async ({ page }) => {
+  // UTC July 21, 11:59 → UTC+12 is July 21, 23:59. One minute away.
+  await withFakeDate(page, '2025-07-21T11:59:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('How many digits can you remember today?');
+});
+
+test('subtitle: NOT approximation day once UTC-12 has rolled out of July 22', async ({ page }) => {
+  // UTC July 23, 12:01 → UTC-12 is July 23, 00:01. Approximation day ended everywhere.
+  await withFakeDate(page, '2025-07-23T12:01:00Z');
+  await expect(page.locator('#subtitle')).toHaveText('How many digits can you remember today?');
+});
+
 // ---- Group padding ----
 
 test('grouped: partial group reserves the same width as a complete group', async ({ page }) => {
