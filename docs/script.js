@@ -471,6 +471,14 @@ const skipPresetBtns = document.querySelectorAll('.skip-preset');
 const missedTile = document.getElementById('stat-missed-tile');
 const missedModal = document.getElementById('missed-modal');
 const motionModeInputs = document.querySelectorAll('input[name="motion-mode"]');
+const motionHint = document.getElementById('motion-hint');
+// One description per motion level — only the selected level's hint is shown.
+const MOTION_HINTS = {
+  zen: 'Greyscale, minimal interface. Counters only shown on pause or game over (Esc to exit).',
+  low: 'Solid cursor, no animated indicators. Timer hidden in practice.',
+  medium: 'Subtle check button, last-digit indicator on check.',
+  high: 'Blinking cursor and per-digit auto-fill animation.',
+};
 const hideKeypadInputs = document.querySelectorAll('input[name="hide-keypad"]');
 const practiceLookaheadInput = document.getElementById('practice-lookahead');
 const practiceLookaheadSetting = document.getElementById('practice-lookahead-setting');
@@ -531,6 +539,7 @@ function applyMotionMode(mode, persist = true) {
   }
   state.motionMode = mode;
   document.documentElement.setAttribute('data-motion', mode);
+  if (motionHint) motionHint.textContent = MOTION_HINTS[mode];
   motionModeInputs.forEach(input => { input.checked = input.value === mode; });
   if (persist) localStorage.setItem(STORAGE_KEYS.motionMode, mode);
   // Low-mode practice starts with the elapsed timer dimmed; users can
