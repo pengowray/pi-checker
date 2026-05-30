@@ -658,8 +658,9 @@ function canSkip() {
   return true;
 }
 
-function skipDigits(n) {
+function skipDigits(n, fade = 'slow') {
   if (!canSkip()) return 0;
+  const fadeStartedAt = performance.now();
   const remaining = state.digits.length - nextPiIdx();
   const count = Math.min(Math.max(0, n | 0), remaining);
   if (count === 0) return 0;
@@ -669,6 +670,8 @@ function skipDigits(n) {
     state.entries.push({
       char: state.digits[nextPiIdx()],
       t: t,
+      fadeIn: fade,
+      fadeStartedAt: fadeStartedAt,
       skipped: true,
       checked: true,
       status: 'pending',
@@ -682,7 +685,7 @@ function skipDigits(n) {
   return count;
 }
 
-function skipNextDigit() { skipDigits(1); }
+function skipNextDigit() { skipDigits(1, 'fast'); }
 
 function updateSequenceDigitsHint() {
   const def = SEQUENCES[state.sequenceId];
@@ -1260,11 +1263,14 @@ function inputPaste(text) {
 
   const entriesLengthBefore = state.entries.length;
   const firstNewIdx = state.entries.length;
+  const pasteFadeStartedAt = performance.now();
   for (let k = startIdx; k < digits.length; k++) {
     const t = state.startTime === null ? null : (performance.now() - state.startTime);
     state.entries.push({
       char: digits[k],
       t: t,
+      fadeIn: 'fast',
+      fadeStartedAt: pasteFadeStartedAt,
       skipped: true,
       checked: true,
       status: 'pending',
@@ -1719,6 +1725,21 @@ function applyActivePadding(gs, displayedPi) {
 // A literal " " inside an inline-block can collapse to near-zero width in
 // some browsers, so spaces are rendered as NBSP and given an explicit
 // min-width class.
+// Newly revealed digits fade in so the user can see them appear. The entry
+// carries fadeIn ('slow' = 0.8s for the Skip dialog, 'fast' = 0.14s for paste
+// and single-key "v" skips) plus fadeStartedAt. We resume the animation
+// mid-flight via a negative --fade-delay so a re-render mid-fade doesn't
+// restart it, and clear the flag once it's finished so it never re-animates.
+function applyDigitFade(el, e) {
+  if (!e.fadeIn) return;
+  const durMs = e.fadeIn === 'slow' ? 800 : 140;
+  const elapsed = e.fadeStartedAt != null ? performance.now() - e.fadeStartedAt : 0;
+  if (elapsed >= durMs) { e.fadeIn = null; return; }
+  el.classList.add('digit-fade');
+  el.style.setProperty('--fade-duration', durMs + 'ms');
+  el.style.setProperty('--fade-delay', '-' + Math.max(0, Math.round(elapsed)) + 'ms');
+}
+
 function setCharText(el, char) {
   if (char === ' ') {
     el.classList.add('space-char');
@@ -1782,6 +1803,7 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
     }
     setCharText(main, e.char);
   }
+  applyDigitFade(main, e);
   nodes.push(main);
   if (hasPrimeAfter) {
     const ps = document.createElement('span');

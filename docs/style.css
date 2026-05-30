@@ -372,6 +372,16 @@ input[type="range"]:disabled {
   to { opacity: 1; transform: none; }
 }
 
+/* Newly revealed digits fade in so the user can see them appear. The
+   duration is set inline per source: ~0.8s for the Skip dialog (slow enough
+   to watch the digits arrive) and ~0.14s for pasted digits and single-key
+   "v" skips. The negative --fade-delay lets the animation resume mid-flight
+   when a re-render recreates the element, so it never restarts or flashes. */
+.digit.digit-fade {
+  animation: fadeIn var(--fade-duration, 0.14s) ease both;
+  animation-delay: var(--fade-delay, 0s);
+}
+
 .modal-head {
   display: flex;
   justify-content: space-between;
