@@ -621,6 +621,7 @@ practiceLookaheadInput.addEventListener('input', () => {
   state.practiceLookahead = v;
   localStorage.setItem(STORAGE_KEYS.practiceLookahead, String(v));
   renderLookaheadLabel();
+  updateModeBadge();
   updateResetVisibility();
   // A lower limit may now mean older pending entries should fire.
   checkLookaheadAutoCheck();
@@ -671,6 +672,7 @@ autoCheckStyleInputs.forEach(input => {
     localStorage.setItem(STORAGE_KEYS.practiceAutoCheckStyle, input.value);
     updateResetVisibility();
     refreshAutoCheckScheduling();
+    updateModeBadge();
     render();
   });
 });
@@ -956,12 +958,25 @@ function updateModeBadge() {
     delayText = state.bulletStartSeconds + 's start, +' + state.bulletBonusSeconds +
       '/−' + state.bulletPenaltySeconds;
   }
-  else if (isManual()) delayText = 'manual';
+  else if (isManual()) {
+    // Manual: user presses Check/Enter. A finite lookahead still force-checks
+    // the oldest pending digit once enough newer ones stack behind it.
+    delayText = (state.mode === 'practice' && state.practiceLookahead > 0)
+      ? state.practiceLookahead + ' digit delay / manual'
+      : 'manual';
+  }
   else if (state.autoCheckSeconds === 0) delayText = 'instant';
   else {
-    delayText = state.autoCheckSeconds + 's auto-check';
-    if (state.mode === 'practice' && state.practiceLookahead > 0) {
-      delayText += ', −' + state.practiceLookahead;
+    const seconds = state.autoCheckSeconds;
+    const finite = state.mode === 'practice' && state.practiceLookahead > 0;
+    // "last digit" (singular) when the cap is a single digit.
+    const target = state.practiceLookahead === 1
+      ? 'last digit'
+      : 'last ' + state.practiceLookahead + ' digits';
+    if (useOnIdleAutoCheck()) {
+      delayText = finite ? seconds + 's idle for ' + target : seconds + 's idle';
+    } else {
+      delayText = finite ? seconds + 's delay on ' + target : seconds + 's delay per digit';
     }
   }
   modeBadge.textContent = modeName + ' · ' + delayText;
