@@ -382,6 +382,13 @@ input[type="range"]:disabled {
   animation-delay: var(--fade-delay, 0s);
 }
 
+/* Zen motion: the quick paste / single-"v" fade is just ambient motion, so
+   drop it — those digits appear instantly. The slower Skip-dialog fade stays;
+   it's a deliberate "watch them arrive" cue rather than incidental motion. */
+:root[data-motion="zen"] .digit.digit-fade.fade-fast {
+  animation: none;
+}
+
 .modal-head {
   display: flex;
   justify-content: space-between;

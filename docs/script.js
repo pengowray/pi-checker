@@ -1735,7 +1735,7 @@ function applyDigitFade(el, e) {
   const durMs = e.fadeIn === 'slow' ? 800 : 140;
   const elapsed = e.fadeStartedAt != null ? performance.now() - e.fadeStartedAt : 0;
   if (elapsed >= durMs) { e.fadeIn = null; return; }
-  el.classList.add('digit-fade');
+  el.classList.add('digit-fade', e.fadeIn === 'slow' ? 'fade-slow' : 'fade-fast');
   el.style.setProperty('--fade-duration', durMs + 'ms');
   el.style.setProperty('--fade-delay', '-' + Math.max(0, Math.round(elapsed)) + 'ms');
 }
