@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <!-- interactive-widget=resizes-content: when the keypad-hidden setting is on
+       and tapping the display opens the OS keyboard, shrink the layout viewport
+       (and 100dvh) to the space above the keyboard so the flex column reflows
+       and the actions row stays visible. Without it the keyboard only shrinks
+       the visual viewport, leaving the bottom controls behind the keyboard and
+       causing flicker when panning on Firefox Android. (Android-only; iOS Safari
+       ignores it.) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
   <meta name="theme-color" content="#1a1a1a">
   <title>Pi Checker by Pengo Wray</title>
   <script>
