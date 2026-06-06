@@ -2320,12 +2320,24 @@ function reset() {
 }
 
 // ---- Event wiring ----
+// Keypad keys fire on pointerdown rather than click. On iOS Safari the
+// synthetic click that follows a touch is delayed and frequently dropped
+// when taps come fast or the finger shifts a hair, which made the keypad
+// feel sluggish / miss taps there (Android's engines are more forgiving).
+// pointerdown fires the instant the finger lands, for an immediate,
+// reliable response. preventDefault suppresses focus-steal, scrolling, and
+// the ghost click. Keyboard activation (Enter / Space) dispatches a click
+// with detail 0 and no preceding pointer event, so we keep a click handler
+// for that path only.
 function wireKey(btn, fn) {
-  btn.addEventListener('click', () => {
+  btn.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return; // ignore right / middle mouse buttons
+    e.preventDefault();
     fn();
-    btn.blur();
   });
-  btn.addEventListener('mousedown', (e) => e.preventDefault());
+  btn.addEventListener('click', (e) => {
+    if (e.detail === 0) fn(); // keyboard activation only; pointer taps handled above
+  });
 }
 
 allDigitBtns.forEach(btn => {
