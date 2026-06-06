@@ -2320,50 +2320,44 @@ function reset() {
 }
 
 // ---- Event wiring ----
-// Keypad keys fire on a pointerdown/pointerup pair rather than click. On iOS
-// WebKit (Safari and all wrapped browsers, e.g. DuckDuckGo) the synthetic
-// click that follows a touch is delayed and frequently dropped when taps come
-// fast or the finger shifts a hair, which made the keypad feel sluggish / miss
-// taps there (Android's engines are more forgiving). Driving it off pointer
-// events makes each key respond reliably the moment it's pressed, while firing
-// on pointerup lets you slide a finger off a key to cancel.
+// Keypad keys fire from a touchend handler (touch) plus a click handler
+// (mouse / keyboard), rather than relying on the synthetic click alone.
 //
-// Touch pointers receive implicit pointer capture, which would otherwise route
-// pointerup back to the key where the finger first landed even after sliding
-// away. We release that capture so the release hit-tests to the element
-// actually under the finger (which also lets the :active press state follow
-// the finger), and additionally guard with a bounds check so cancel works even
-// on engines that keep the capture. Keyboard activation (Enter / Space)
-// dispatches a click with detail 0 and no preceding pointer event, handled by
-// the click listener.
+// iOS WebKit holds tap events for ~300ms after a touch to watch for a
+// double-tap-zoom gesture. touch-action: manipulation is supposed to disable
+// that, and does in Safari, but DuckDuckGo's WKWebView ignores it — so fast
+// typing felt sluggish (~300ms to register a press) and dropped every other
+// digit, because a quick second tap was swallowed into the suppressed zoom
+// gesture. The gesture detection sits at the touch layer, so click and pointer
+// events inherit the delay; only acting on the touch event itself defeats it.
+//
+// Firing fn() directly in touchend makes each key respond the instant the
+// finger lifts — we never wait for or depend on the native click — and
+// preventDefault cancels the delayed ghost click and the zoom gesture. Reading
+// the lift point from changedTouches lets a finger slide off a key to cancel.
+// The trailing ghost click is ignored via a timestamp guard; real mouse and
+// keyboard activations (which carry no recent touch) still go through click.
 function wireKey(btn, fn) {
-  let activePointer = null;
-  btn.addEventListener('pointerdown', (e) => {
-    if (e.button > 0) return; // ignore right / middle mouse buttons
-    activePointer = e.pointerId;
-    if (btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
-      btn.releasePointerCapture(e.pointerId);
-    }
-    e.preventDefault(); // suppress focus-steal, scrolling, and the ghost click
-  });
-  btn.addEventListener('pointerup', (e) => {
-    if (e.pointerId !== activePointer) return;
-    activePointer = null;
-    // Slide-off cancels: only fire if the finger lifted within this key. (The
-    // bounds check covers engines that keep implicit capture and so still
-    // deliver pointerup here with off-key coordinates.)
-    const r = btn.getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right ||
-        e.clientY < r.top || e.clientY > r.bottom) return;
+  let lastTouch = -Infinity;
+  btn.addEventListener('touchend', (e) => {
+    lastTouch = e.timeStamp;
+    const t = e.changedTouches[0];
     e.preventDefault();
+    if (!t) return;
+    // Slide-off cancels: only fire if the finger lifted within this key.
+    const r = btn.getBoundingClientRect();
+    if (t.clientX < r.left || t.clientX > r.right ||
+        t.clientY < r.top || t.clientY > r.bottom) return;
+    fn();
+  }, { passive: false });
+  btn.addEventListener('click', (e) => {
+    // Ignore the ghost click that trails a touch; act on real mouse / keyboard.
+    if (e.timeStamp - lastTouch < 700) return;
     fn();
   });
-  btn.addEventListener('pointercancel', (e) => {
-    if (e.pointerId === activePointer) activePointer = null;
-  });
-  btn.addEventListener('click', (e) => {
-    if (e.detail === 0) fn(); // keyboard activation only; pointer taps handled above
-  });
+  // Keep a mouse press from stealing focus / showing a focus ring (keyboard
+  // focus via Tab still works; touch compat-mouse events are suppressed above).
+  btn.addEventListener('mousedown', (e) => e.preventDefault());
 }
 
 allDigitBtns.forEach(btn => {

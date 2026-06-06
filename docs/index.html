@@ -35,7 +35,9 @@
       } catch (e) { /* localStorage / matchMedia unavailable — fall through */ }
     })();
   </script>
-  <link rel="stylesheet" href="style.css">
+  <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
+       stale script.css/js for up to 10 min after a push. -->
+  <link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
   <header>
@@ -430,7 +432,7 @@
     </div>
   </div>
 
-  <script src="sequences.js"></script>
-  <script src="script.js"></script>
+  <script src="sequences.js?v=2"></script>
+  <script src="script.js?v=2"></script>
 </body>
 </html>
