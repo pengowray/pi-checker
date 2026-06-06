@@ -2320,20 +2320,46 @@ function reset() {
 }
 
 // ---- Event wiring ----
-// Keypad keys fire on pointerdown rather than click. On iOS Safari the
-// synthetic click that follows a touch is delayed and frequently dropped
-// when taps come fast or the finger shifts a hair, which made the keypad
-// feel sluggish / miss taps there (Android's engines are more forgiving).
-// pointerdown fires the instant the finger lands, for an immediate,
-// reliable response. preventDefault suppresses focus-steal, scrolling, and
-// the ghost click. Keyboard activation (Enter / Space) dispatches a click
-// with detail 0 and no preceding pointer event, so we keep a click handler
-// for that path only.
+// Keypad keys fire on a pointerdown/pointerup pair rather than click. On iOS
+// WebKit (Safari and all wrapped browsers, e.g. DuckDuckGo) the synthetic
+// click that follows a touch is delayed and frequently dropped when taps come
+// fast or the finger shifts a hair, which made the keypad feel sluggish / miss
+// taps there (Android's engines are more forgiving). Driving it off pointer
+// events makes each key respond reliably the moment it's pressed, while firing
+// on pointerup lets you slide a finger off a key to cancel.
+//
+// Touch pointers receive implicit pointer capture, which would otherwise route
+// pointerup back to the key where the finger first landed even after sliding
+// away. We release that capture so the release hit-tests to the element
+// actually under the finger (which also lets the :active press state follow
+// the finger), and additionally guard with a bounds check so cancel works even
+// on engines that keep the capture. Keyboard activation (Enter / Space)
+// dispatches a click with detail 0 and no preceding pointer event, handled by
+// the click listener.
 function wireKey(btn, fn) {
+  let activePointer = null;
   btn.addEventListener('pointerdown', (e) => {
     if (e.button > 0) return; // ignore right / middle mouse buttons
+    activePointer = e.pointerId;
+    if (btn.hasPointerCapture && btn.hasPointerCapture(e.pointerId)) {
+      btn.releasePointerCapture(e.pointerId);
+    }
+    e.preventDefault(); // suppress focus-steal, scrolling, and the ghost click
+  });
+  btn.addEventListener('pointerup', (e) => {
+    if (e.pointerId !== activePointer) return;
+    activePointer = null;
+    // Slide-off cancels: only fire if the finger lifted within this key. (The
+    // bounds check covers engines that keep implicit capture and so still
+    // deliver pointerup here with off-key coordinates.)
+    const r = btn.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right ||
+        e.clientY < r.top || e.clientY > r.bottom) return;
     e.preventDefault();
     fn();
+  });
+  btn.addEventListener('pointercancel', (e) => {
+    if (e.pointerId === activePointer) activePointer = null;
   });
   btn.addEventListener('click', (e) => {
     if (e.detail === 0) fn(); // keyboard activation only; pointer taps handled above
