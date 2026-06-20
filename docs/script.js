@@ -244,6 +244,9 @@ const SEQUENCES = {
     naturalSpaces: true,
     finite: true,
     phoneLetters: true,
+    // Ends as soon as its final digit (3) lands as the 20th digit — or any
+    // digit after, if an earlier slip pushed it past position 20.
+    lenientEnd: true,
   },
   // 🎮 DOOM's M_Random rndtable[256] — the fixed pseudo-random table from the
   // id Software source. Finite (256 values), entered as space-separated
@@ -1404,11 +1407,23 @@ function maybeCompleteFinite() {
   if (!def || !def.finite) return false;
   if (state.sequenceComplete) return false;
   if (state.entries.length === 0) return false;
-  if ((state.nextSeqIdx || 0) < state.digits.length) return false;
   const last = state.entries[state.entries.length - 1];
-  if (!last || last.status !== 'correct') return false;
-  completeFiniteSequence();
-  return true;
+  if (!last) return false;
+  // Lenient finish: the sequence's final digit, typed at or beyond the final
+  // position, ends the run even after an earlier slip or overshoot — e.g. the
+  // emergency number ends the moment a "3" lands as (or after) the 20th digit.
+  if (def.lenientEnd &&
+      state.entries.length >= state.digits.length &&
+      last.char === state.digits[state.digits.length - 1]) {
+    completeFiniteSequence();
+    return true;
+  }
+  // Standard: reached the end with a correct final digit.
+  if ((state.nextSeqIdx || 0) >= state.digits.length && last.status === 'correct') {
+    completeFiniteSequence();
+    return true;
+  }
+  return false;
 }
 
 function completeFiniteSequence() {

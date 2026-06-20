@@ -79,6 +79,16 @@ test('emergency number: keypad shows faint phone letters (ABC/DEF…) for this m
   expect(after).toContain('DEF');
 });
 
+test('emergency number: a final "3" after a slip still ends the run', async ({ page }) => {
+  await setSequence(page, 'emergency');
+  await page.keyboard.type('0118999881999119725'); // first 19 digits
+  await page.keyboard.type('5'); // wrong 20th (should be 3) — does not finish
+  await expect(page.locator('#stat-time')).not.toHaveClass(/frozen/);
+  await page.keyboard.type('3'); // the final 3, now at position 21 → ends it
+  await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
+  await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
+});
+
 test('doom: comma and space are interchangeable separators', async ({ page }) => {
   await setSequence(page, 'doom');
   // "0 8 109" → 0, sep, 8, sep, 1, 0, 9 = 7 correct entries.
