@@ -263,17 +263,47 @@ test('hex keypad uses the JE600-style layout (ABCD top row, 0 bottom-right)', as
   ]);
 });
 
-test('sequence dropdown stays in sync with state after reload', async ({ page }) => {
-  // Pick a non-default sequence, then reload — the app intentionally
-  // doesn't persist sequence choice, so it should come back as pi. The
-  // dropdown must reflect that (otherwise users see "tau" selected but
-  // can't re-pick tau without first switching to something else).
+test('picking a sequence writes a shareable URL hash and reload restores it', async ({ page }) => {
+  // Selecting a non-default sequence mirrors it into the URL hash so the link
+  // can be copied/shared; reloading that URL restores the selection.
   await setSequence(page, 'tau');
+  await expect(page).toHaveURL(/#tau$/);
   await page.reload();
-  await expect(page.locator('#app-title')).toContainText('π');
-  await expect(page.locator('#prefix')).toContainText('3.');
+  await expect(page.locator('#app-title')).toContainText('τ');
+  await expect(page.locator('#prefix')).toContainText('6.');
   await page.locator('#settings-toggle').click();
-  await expect(page.locator('#sequence')).toHaveValue('pi');
+  await expect(page.locator('#sequence')).toHaveValue('tau');
+});
+
+test('loading a #sequence hash directly selects that sequence', async ({ page }) => {
+  await page.goto('/#e');
+  await expect(page.locator('#app-title')).toContainText('e Checker');
+  await expect(page.locator('#prefix')).toContainText('2.');
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('#sequence')).toHaveValue('e');
+});
+
+test('the default sequence (pi) keeps a clean URL with no hash', async ({ page }) => {
+  // Switch away then back to pi — selecting the default clears the hash.
+  await setSequence(page, 'tau');
+  await expect(page).toHaveURL(/#tau$/);
+  await setSequence(page, 'pi');
+  await expect(page).not.toHaveURL(/#/);
+});
+
+test('an unknown hash falls back to pi and is cleared', async ({ page }) => {
+  await page.goto('/#not-a-sequence');
+  await expect(page.locator('#app-title')).toContainText('π');
+  await expect(page).not.toHaveURL(/#/);
+});
+
+test('editing the hash live switches sequence without reload', async ({ page }) => {
+  await expect(page.locator('#app-title')).toContainText('π');
+  // Drive a hashchange the way the back button or a pasted link would.
+  await page.evaluate(() => { location.hash = 'sqrt2'; });
+  await expect(page.locator('#app-title')).toContainText('√2');
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('#sequence')).toHaveValue('sqrt2');
 });
 
 test('keypad hint uses a verbose label per sequence', async ({ page }) => {

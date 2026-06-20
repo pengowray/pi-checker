@@ -792,20 +792,66 @@ function applySequence(id) {
   loadLong(id);
 }
 
-sequenceSelect.addEventListener('change', () => {
-  const newId = sequenceSelect.value;
-  if (newId === state.sequenceId) return;
+// ---- Sequence sharing via the URL hash ----
+// The selected sequence is mirrored into location.hash (e.g. #tau) so a URL
+// can be copied to share — or reload — a selection. Pi (the default) clears
+// the hash to keep the canonical URL clean.
+function sequenceFromHash() {
+  let id = '';
+  try { id = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim(); }
+  catch (e) { id = (location.hash || '').replace(/^#/, '').trim(); }
+  return SEQUENCES[id] ? id : null;
+}
+
+function updateSequenceHash(id) {
+  const hash = (id && id !== DEFAULT_SEQUENCE) ? '#' + id : '';
+  // replaceState (rather than assigning location.hash) keeps history clean and
+  // — crucially — never fires hashchange, so it can't re-enter our handler.
+  try {
+    history.replaceState(null, '', location.pathname + location.search + hash);
+  } catch (e) {
+    location.hash = hash; // file:// or sandboxed: best-effort fallback
+  }
+}
+
+// Switch sequences from any source (the dropdown or a URL hash change),
+// confirming first if it would discard in-progress entries. Returns false if
+// the switch was a no-op or the user cancelled.
+function changeSequence(newId, { fromHash = false } = {}) {
+  if (!SEQUENCES[newId] || newId === state.sequenceId) return false;
   if (state.entries.length > 0) {
     const ok = confirm('Switching sequence will reset your current progress. Continue?');
     if (!ok) {
+      // Put the control that triggered this back to the current sequence.
       sequenceSelect.value = state.sequenceId;
-      return;
+      if (fromHash) updateSequenceHash(state.sequenceId);
+      return false;
     }
   }
   clearSession();
   applySequence(newId);
+  updateSequenceHash(newId);
   updateResetVisibility();
   render();
+  return true;
+}
+
+sequenceSelect.addEventListener('change', () => {
+  changeSequence(sequenceSelect.value);
+});
+
+// React to the hash being changed externally (a shared link opened in an
+// already-loaded tab, manual edit, or back/forward). An empty/unknown hash
+// means the default sequence.
+window.addEventListener('hashchange', () => {
+  const desired = sequenceFromHash() || DEFAULT_SEQUENCE;
+  if (desired === state.sequenceId) {
+    // Already on this sequence — just normalize the URL (clear an unknown or
+    // redundant hash) so it matches what's shown.
+    updateSequenceHash(desired);
+  } else {
+    changeSequence(desired, { fromHash: true });
+  }
 });
 
 // ---- Group size ----
@@ -3152,7 +3198,13 @@ function applyPiDaySubtitle() {
 
 // ---- Init ----
 loadPersistedSettings();
-applySequence('pi'); // also triggers loadLong('pi') via applySequence
+// A #sequence in the URL (e.g. a shared #tau link) picks the starting
+// sequence; otherwise pi. Normalize the hash so it matches what's shown
+// (clears it for pi, drops an unknown hash). applySequence also triggers
+// loadLong() for the chosen sequence.
+const initialSequence = sequenceFromHash() || DEFAULT_SEQUENCE;
+applySequence(initialSequence);
+updateSequenceHash(initialSequence);
 applyModeDefaults();
 updateModeHint();
 updateResetVisibility();
