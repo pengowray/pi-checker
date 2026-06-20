@@ -37,7 +37,7 @@
   </script>
   <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
        stale script.css/js for up to 10 min after a push. -->
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header>
@@ -86,16 +86,19 @@
 
     <div class="keypad-hint" id="keypad-hint">Enter digit 1 of &pi;:</div>
 
+    <!-- data-letters paints the faint phone-keypad letters (ABC/DEF…); they
+         only show when .phone-letters is on the keypad (emergency-number
+         sequence). 1 and 0 stay bare, like a real phone. -->
     <section class="keypad keypad-decimal" id="keypad-decimal" role="group" aria-label="Numeric keypad">
       <button class="key" data-digit="1">1</button>
-      <button class="key" data-digit="2">2</button>
-      <button class="key" data-digit="3">3</button>
-      <button class="key" data-digit="4">4</button>
-      <button class="key" data-digit="5">5</button>
-      <button class="key" data-digit="6">6</button>
-      <button class="key" data-digit="7">7</button>
-      <button class="key" data-digit="8">8</button>
-      <button class="key" data-digit="9">9</button>
+      <button class="key" data-digit="2" data-letters="ABC">2</button>
+      <button class="key" data-digit="3" data-letters="DEF">3</button>
+      <button class="key" data-digit="4" data-letters="GHI">4</button>
+      <button class="key" data-digit="5" data-letters="JKL">5</button>
+      <button class="key" data-digit="6" data-letters="MNO">6</button>
+      <button class="key" data-digit="7" data-letters="PQRS">7</button>
+      <button class="key" data-digit="8" data-letters="TUV">8</button>
+      <button class="key" data-digit="9" data-letters="WXYZ">9</button>
       <button class="key key-check" data-action="check" aria-label="Check">&#x2713;</button>
       <button class="key" data-digit="0">0</button>
       <button class="key key-back" data-action="back" aria-label="Backspace">&#x232B;</button>
@@ -167,6 +170,7 @@
             <option value="primes-spaced">Primes (spaced)</option>
             <option value="champernowne">Champernowne&rsquo;s constant</option>
             <option value="less-than-3">&lt;3 (less than 3)</option>
+            <option value="emergency">New emergency services number</option>
           </select>
           <small id="sequence-digits-hint" class="hint"></small>
         </div>
@@ -432,7 +436,7 @@
     </div>
   </div>
 
-  <script src="sequences.js?v=2"></script>
-  <script src="script.js?v=2"></script>
+  <script src="sequences.js?v=3"></script>
+  <script src="script.js?v=3"></script>
 </body>
 </html>

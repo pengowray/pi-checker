@@ -25,7 +25,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
     'pi', 'tau', 'pi-squared', 'zeta2', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
     'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
-    'less-than-3',
+    'less-than-3', 'emergency',
   ]);
 });
 
@@ -41,6 +41,42 @@ test('less-than-3: any digits are accepted as correct', async ({ page }) => {
   // Leading "2" is absorbed by the prefix; the other six land as correct.
   await expect(page.locator('#stat-correct')).toHaveText('6');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('emergency number: no prefix clue, auto-spaces, and the final digit auto-checks', async ({ page }) => {
+  await setSequence(page, 'emergency');
+  // No "0." clue — the leading 0 is part of what the user has to recall.
+  await expect(page.locator('#prefix')).toBeHidden();
+  // Type the whole number; entering the final digit correctly auto-checks
+  // everything (no Enter, no waiting), so all 20 land correct on their own.
+  await page.keyboard.type('01189998819991197253');
+  await expect(page.locator('#stat-correct')).toHaveText('20');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  // 0118 999 881 999 119 7253 → five auto-inserted spaces.
+  await expect(page.locator('#user-digits .prime-space')).toHaveCount(5);
+});
+
+test('emergency number: finishing stops the clock and locks input', async ({ page }) => {
+  await setSequence(page, 'emergency');
+  await page.keyboard.type('01189998819991197253');
+  // Clock frozen, keypad disabled, and a clear "done" message.
+  await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
+  await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
+  await expect(page.locator('#keypad-hint')).toHaveText('Complete — every digit correct!');
+});
+
+test('emergency number: keypad shows faint phone letters (ABC/DEF…) for this mode only', async ({ page }) => {
+  // Default sequence (pi): no phone letters.
+  await expect(page.locator('#keypad-decimal')).not.toHaveClass(/phone-letters/);
+  await setSequence(page, 'emergency');
+  await expect(page.locator('#keypad-decimal')).toHaveClass(/phone-letters/);
+  await expect(page.locator('#keypad-decimal .key[data-digit="2"]')).toHaveAttribute('data-letters', 'ABC');
+  await expect(page.locator('#keypad-decimal .key[data-digit="7"]')).toHaveAttribute('data-letters', 'PQRS');
+  // The faint letters actually render via ::after content.
+  const after = await page.locator('#keypad-decimal .key[data-digit="3"]').evaluate(
+    el => getComputedStyle(el, '::after').content
+  );
+  expect(after).toContain('DEF');
 });
 
 test('pi: typing the first digits scores correct', async ({ page }) => {

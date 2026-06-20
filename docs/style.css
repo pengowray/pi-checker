@@ -743,6 +743,31 @@ input[type="range"]:disabled {
   51%, 100% { opacity: 0; }
 }
 
+/* ---- Finite-sequence completion celebration -----------------------------
+   One-shot glow on the display when a finite sequence (the emergency number)
+   is finished. Deliberately restrained — it's an emergency number. The JS
+   only adds .celebrate on a flawless run at medium/high motion, so low/zen
+   never animate. Medium = a green success glow; high adds a brief blue/red
+   emergency-light shimmer before settling on green. */
+.pi-display.celebrate { animation: completeGlow 1.4s ease-out; }
+
+@keyframes completeGlow {
+  0%   { box-shadow: var(--shadow); }
+  25%  { box-shadow: 0 0 0 1px var(--correct), 0 0 12px var(--correct); }
+  100% { box-shadow: var(--shadow); }
+}
+
+:root[data-motion="high"] .pi-display.celebrate { animation: completeLights 1.6s ease-out; }
+
+@keyframes completeLights {
+  0%   { box-shadow: var(--shadow); }
+  15%  { box-shadow: 0 0 0 1px #3b82f6, 0 0 16px #3b82f6; }
+  40%  { box-shadow: 0 0 0 1px #ef4444, 0 0 16px #ef4444; }
+  65%  { box-shadow: 0 0 0 1px #3b82f6, 0 0 16px #3b82f6; }
+  85%  { box-shadow: 0 0 0 1px var(--correct), 0 0 12px var(--correct); }
+  100% { box-shadow: var(--shadow); }
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -1133,6 +1158,31 @@ input[type="range"]:disabled {
   background: var(--key-active);
   transform: scale(0.97);
 }
+
+/* Faint phone-keypad letters (ABC / DEF …) under each digit, shown only for
+   the emergency-number sequence (applySequence toggles .phone-letters on the
+   decimal keypad). Absolutely positioned so they don't change key height;
+   only keys carrying a data-letters value (2–9) get them, so 1 and 0 stay
+   bare like a real phone. text-indent offsets the trailing letter-spacing so
+   the spaced glyphs stay optically centred. */
+.keypad-decimal.phone-letters .key[data-digit] { position: relative; }
+.keypad-decimal.phone-letters .key[data-letters]::after {
+  content: attr(data-letters);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.42rem;
+  text-align: center;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-indent: 0.16em;
+  line-height: 1;
+  color: var(--muted);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.keypad-decimal.phone-letters .key:disabled::after { opacity: 0.3; }
 
 .keypad-hex .key {
   font-size: 1.4rem;

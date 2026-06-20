@@ -187,7 +187,9 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',          // filled by setupPrimes()
-    primeBoundaries: null, // Set of cumulative digit-positions where each prime ends
+    // Generic: cumulative digit-positions a visual space follows. For primes
+    // it's each prime's end; the emergency number uses it for phone grouping.
+    spaceBoundaries: null,
     naturalSpaces: true,
   },
   'primes-spaced': {
@@ -218,6 +220,28 @@ const SEQUENCES = {
     keypadType: 'decimal',
     acceptAny: true,
     digits: '',          // filled by setupLessThan3()
+  },
+  // ☎ The IT Crowd's "new, easy-to-remember" emergency services number,
+  // 0118 999 881 999 119 7253. Unlike the constants this one is finite, so
+  // it actually ends: entering the final digit correctly auto-checks it and
+  // stops the clock (see maybeCompleteFinite). No prefix/clue — the leading
+  // 0 is part of what the user has to recall. Spaces auto-insert at the
+  // phone-number group boundaries via spaceBoundaries (the same mechanism
+  // primes uses); phoneLetters paints the faint ABC/DEF keypad letters.
+  emergency: {
+    label: 'New emergency services number',
+    shortLabel: 'emergency number',
+    hintLabel: 'the new emergency services number',
+    titleHtml: 'Emergency Checker',
+    integerPart: '',
+    prefix: '',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '01189998819991197253',
+    spaceBoundaries: new Set([4, 7, 10, 13, 16]),
+    naturalSpaces: true,
+    finite: true,
+    phoneLetters: true,
   },
 };
 
@@ -275,7 +299,7 @@ deriveTau();
     boundaries.add(pos);
   }
   SEQUENCES.primes.digits = joined;
-  SEQUENCES.primes.primeBoundaries = boundaries;
+  SEQUENCES.primes.spaceBoundaries = boundaries;
   SEQUENCES['primes-spaced'].digits = primes.slice(1).join(' ');
 })();
 
@@ -374,6 +398,11 @@ const state = {
   hardcoreFrozenAt: 0,
   practicePaused: false,
   practicePauseDisplayedAt: 0,
+  // Finite-sequence completion (e.g. the emergency number): once the final
+  // digit is entered correctly the run is over — clock frozen at
+  // completeFrozenAt, input locked (see isInputLocked / maybeCompleteFinite).
+  sequenceComplete: false,
+  completeFrozenAt: 0,
   erasedErrors: 0,
   erasedPreCheck: 0, // wrong digits erased before they were checked; not displayed yet
   // Pi seqIdx positions where a wrong digit was erased. When a digit is later
@@ -715,6 +744,7 @@ function skipDigits(n, fade = 'slow') {
     });
   }
   computeStatuses(firstNewIdx);
+  maybeCompleteFinite(); // skipping onto the final digit also ends the run
   render();
   return count;
 }
@@ -749,6 +779,8 @@ function applySequence(id) {
   keypadHex.hidden = def.keypadType !== 'hex';
   // Show the space key only when the alphabet uses spaces.
   keypadDecimal.classList.toggle('with-space', def.alphabet.includes(' '));
+  // Faint phone-keypad letters (ABC/DEF…) for sequences that opt in.
+  keypadDecimal.classList.toggle('phone-letters', !!def.phoneLetters);
   // Keep the settings dropdown in sync — browsers restore form values
   // across reloads, so without this the select can show a stale
   // sequence when the app actually re-initialised back to the default.
@@ -891,6 +923,15 @@ function attemptModeChange(newMode) {
     state.bulletEndReason = null;
   }
 
+  // A finished finite run (e.g. the emergency number) reopens when the user
+  // switches modes: resume the clock from where it froze and unlock input.
+  if (state.sequenceComplete) {
+    if (state.startTime !== null) {
+      state.startTime = performance.now() - state.completeFrozenAt * 1000;
+    }
+    state.sequenceComplete = false;
+  }
+
   state.mode = newMode;
   applyModeDefaults();
   return true;
@@ -912,6 +953,8 @@ function clearSession() {
   state.hardcoreFrozenAt = 0;
   state.practicePaused = false;
   state.practicePauseDisplayedAt = 0;
+  state.sequenceComplete = false;
+  state.completeFrozenAt = 0;
   state.erasedErrors = 0;
   state.erasedPreCheck = 0;
   state.correctedPositions.clear();
@@ -986,6 +1029,12 @@ function updateModeBadge() {
 function updateKeypadHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
+  if (state.sequenceComplete) {
+    keypadHintEl.textContent = isCleanRun()
+      ? 'Complete — every digit correct!'
+      : 'Finished — not a perfect run.';
+    return;
+  }
   const idx = (state.nextSeqIdx || 0) + 1;
   keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + (def.hintLabel || def.shortLabel || def.label) + ':';
 }
@@ -1004,6 +1053,7 @@ function updateModeHint() {
 }
 
 function isInputLocked() {
+  if (state.sequenceComplete) return true;
   if (state.sprintEnded && state.mode === 'sprint') return true;
   if (state.hardcoreFailed && state.mode === 'hardcore') return true;
   if (state.bulletGameOver && state.mode === 'bullet') return true;
@@ -1199,6 +1249,71 @@ function continueInPractice() {
   render();
 }
 
+// ---- Finite-sequence completion ----
+// Most sequences are effectively endless, but a few (the emergency number)
+// have a real last digit. When the user enters that final digit correctly we
+// auto-check everything — so the last digit doesn't sit waiting out the
+// auto-check delay — freeze the clock, lock input, and, on a flawless run,
+// fire a small celebration.
+
+// A flawless run: every position typed correctly, with nothing skipped,
+// auto-filled as missed, or wrong-then-fixed.
+function isCleanRun() {
+  if (state.entries.length === 0) return false;
+  for (const e of state.entries) {
+    if (e.status !== 'correct') return false;
+    if (e.skipped || e.corrected) return false;
+    if (e.missedBefore && e.missedBefore.length > 0) return false;
+  }
+  return true;
+}
+
+// Detects whether the just-updated entries finish a finite sequence with a
+// correct final digit. Returns true (and locks the run) when they do, so the
+// input pipelines can skip their normal scheduling. A wrong last digit leaves
+// the run open so the user can backspace and fix it.
+function maybeCompleteFinite() {
+  const def = SEQUENCES[state.sequenceId];
+  if (!def || !def.finite) return false;
+  if (state.sequenceComplete) return false;
+  if (state.entries.length === 0) return false;
+  if ((state.nextSeqIdx || 0) < state.digits.length) return false;
+  const last = state.entries[state.entries.length - 1];
+  if (!last || last.status !== 'correct') return false;
+  completeFiniteSequence();
+  return true;
+}
+
+function completeFiniteSequence() {
+  if (state.sequenceComplete) return;
+  state.sequenceComplete = true;
+  state.completeFrozenAt = state.startTime === null ? 0
+    : (performance.now() - state.startTime) / 1000;
+  if (state.autoCheckTimer) {
+    clearTimeout(state.autoCheckTimer);
+    state.autoCheckTimer = null;
+  }
+  cancelAllPerDigitTimers();
+  stopCheckBar();
+  markAllChecked();
+  // Score the final digit(s) (bullet) before the run locks.
+  applyBulletScoring();
+  if (isCleanRun()) celebrateComplete();
+}
+
+// A deliberately restrained finish — it's an emergency number, after all: a
+// one-shot glow on the display (green for the clean run that got us here; the
+// high-motion variant adds a brief blue/red emergency-light shimmer). Skipped
+// at low / zen motion, where the user has opted out of incidental motion.
+function celebrateComplete() {
+  if (state.motionMode !== 'medium' && state.motionMode !== 'high') return;
+  if (!piDisplayEl) return;
+  piDisplayEl.classList.remove('celebrate');
+  void piDisplayEl.offsetWidth; // reflow so a repeat completion re-triggers it
+  piDisplayEl.classList.add('celebrate');
+  setTimeout(() => piDisplayEl.classList.remove('celebrate'), 1700);
+}
+
 // ---- Input handling ----
 function inputDigit(d) {
   if (isInputLocked()) return;
@@ -1251,6 +1366,9 @@ function inputDigit(d) {
   state.undoStack.push({ entriesLengthBefore, text: d, wasPaste: false });
   if (!isApplyingHistory) state.redoStack.length = 0;
   computeStatuses(state.entries.length - 1);
+  // Finished a finite sequence with this (correct) digit? Lock the run and
+  // skip the usual auto-check scheduling — it's already all checked.
+  if (maybeCompleteFinite()) { render(); return; }
   if (useOnIdleAutoCheck()) {
     resetAutoCheckTimer();
   } else {
@@ -1330,6 +1448,7 @@ function inputPaste(text) {
   if (!isApplyingHistory) state.redoStack.length = 0;
 
   computeStatuses(firstNewIdx);
+  if (maybeCompleteFinite()) { render(); return; }
   applyBulletScoring();
   checkHardcoreFail();
   checkBulletGameOver();
@@ -1799,7 +1918,7 @@ function setCharText(el, char) {
   }
 }
 
-function buildEntryNodes(e, ctx, hasPrimeAfter) {
+function buildEntryNodes(e, ctx, hasSpaceAfter) {
   const nodes = [];
   if (e.checked) {
     for (const s of e.missedBefore) {
@@ -1855,7 +1974,7 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
   }
   applyDigitFade(main, e);
   nodes.push(main);
-  if (hasPrimeAfter) {
+  if (hasSpaceAfter) {
     const ps = document.createElement('span');
     ps.className = 'prime-space';
     ps.textContent = ' ';
@@ -1864,21 +1983,21 @@ function buildEntryNodes(e, ctx, hasPrimeAfter) {
   return nodes;
 }
 
-function computeEntryFingerprint(e, ctx, hasPrimeAfter) {
+function computeEntryFingerprint(e, ctx, hasSpaceAfter) {
   // Pending entries only depend on char + auto-fill animation state. The
   // started-at timestamp is floored so a same-frame re-render doesn't
   // replace the node (which would restart the CSS animation).
   if (!e.checked) {
     const t = e.autoCheckStartedAt != null ? Math.floor(e.autoCheckStartedAt) : '';
     return 'p|' + e.char + '|' + t + '|' + ctx.autoCheckSeconds + '|' +
-      (ctx.isManual ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
+      (ctx.isManual ? 1 : 0) + '|' + (hasSpaceAfter ? 1 : 0);
   }
   return 'c|' + e.char + '|' + e.status + '|' + (e.expected || '') + '|' +
     (e.skipped ? 1 : 0) + '|' + (e.corrected ? 1 : 0) + '|' +
     e.missedBefore.join(',') + '|' +
     (ctx.inSprint ? 1 : 0) + '|' + (ctx.sprintEnded ? 1 : 0) + '|' +
     (ctx.inPractice ? 1 : 0) + '|' +
-    (ctx.inPracticeAnnot ? 1 : 0) + '|' + (hasPrimeAfter ? 1 : 0);
+    (ctx.inPracticeAnnot ? 1 : 0) + '|' + (hasSpaceAfter ? 1 : 0);
 }
 
 function render() {
@@ -1898,10 +2017,11 @@ function render() {
   lastPaddedGroup = null;
 
   const def = SEQUENCES[state.sequenceId];
-  // Sequences with their own natural spacing (e.g. primes) override the
-  // user-selected grouping — the prime boundaries are the grouping.
+  // Sequences with their own natural spacing (e.g. primes, the emergency
+  // number) override the user-selected grouping — their space boundaries
+  // are the grouping.
   const gs = (def && def.naturalSpaces) ? 0 : state.groupSize;
-  const primeBoundaries = def && def.primeBoundaries;
+  const spaceBoundaries = def && def.spaceBoundaries;
 
   const ctx = {
     inSprint: state.mode === 'sprint',
@@ -1914,7 +2034,7 @@ function render() {
 
   // Sequence/grouping changes invalidate every entry anyway; full rebuild
   // beats comparing 50k fingerprints in those cases.
-  const ctxKey = state.sequenceId + '|' + gs + '|' + (primeBoundaries ? '1' : '0');
+  const ctxKey = state.sequenceId + '|' + gs + '|' + (spaceBoundaries ? '1' : '0');
   if (lastRenderContextKey !== ctxKey) {
     renderCache = [];
     groupElements = [];
@@ -1971,7 +2091,7 @@ function render() {
     lastNodeInGroup.set(gIdx, node);
   }
 
-  function placeEntryNodes(nodes, e, visibleMissed, entryStartPi, mainPi, hasPrimeAfter) {
+  function placeEntryNodes(nodes, e, visibleMissed, entryStartPi, mainPi, hasSpaceAfter) {
     let nodeIdx = 0;
     for (let m = 0; m < visibleMissed; m++) {
       insertNode(nodes[nodeIdx], groupIdxFor(entryStartPi + m));
@@ -1979,13 +2099,13 @@ function render() {
     }
     insertNode(nodes[nodeIdx], groupIdxFor(mainPi));
     nodeIdx++;
-    if (hasPrimeAfter && nodeIdx < nodes.length) {
+    if (hasSpaceAfter && nodeIdx < nodes.length) {
       insertNode(nodes[nodeIdx], groupIdxFor(mainPi));
       nodeIdx++;
     }
   }
 
-  function markPlacedNodes(nodes, visibleMissed, entryStartPi, mainPi, hasPrimeAfter) {
+  function markPlacedNodes(nodes, visibleMissed, entryStartPi, mainPi, hasSpaceAfter) {
     let nodeIdx = 0;
     for (let m = 0; m < visibleMissed; m++) {
       lastNodeInGroup.set(groupIdxFor(entryStartPi + m), nodes[nodeIdx]);
@@ -1993,7 +2113,7 @@ function render() {
     }
     lastNodeInGroup.set(groupIdxFor(mainPi), nodes[nodeIdx]);
     nodeIdx++;
-    if (hasPrimeAfter && nodeIdx < nodes.length) {
+    if (hasSpaceAfter && nodeIdx < nodes.length) {
       lastNodeInGroup.set(groupIdxFor(mainPi), nodes[nodeIdx]);
       nodeIdx++;
     }
@@ -2002,24 +2122,24 @@ function render() {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const seqAfter = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
-    const hasPrimeAfter = !!(primeBoundaries && primeBoundaries.has(seqAfter));
+    const hasSpaceAfter = !!(spaceBoundaries && spaceBoundaries.has(seqAfter));
     const visibleMissed = e.checked ? e.missedBefore.length : 0;
     const entryStartPi = displayedPi;
     const mainPi = entryStartPi + visibleMissed;
     // Include entryStartPi in the fingerprint: if missed-marker counts
     // shift earlier entries' contribution to displayedPi, this entry's
     // placement (and possibly its group) changes too.
-    const fp = computeEntryFingerprint(e, ctx, hasPrimeAfter) + '|s' + entryStartPi;
+    const fp = computeEntryFingerprint(e, ctx, hasSpaceAfter) + '|s' + entryStartPi;
 
     if (i >= renderCache.length || renderCache[i].fp !== fp) {
       if (i < renderCache.length) {
         for (const n of renderCache[i].nodes) n.remove();
       }
-      const newNodes = buildEntryNodes(e, ctx, hasPrimeAfter);
-      placeEntryNodes(newNodes, e, visibleMissed, entryStartPi, mainPi, hasPrimeAfter);
+      const newNodes = buildEntryNodes(e, ctx, hasSpaceAfter);
+      placeEntryNodes(newNodes, e, visibleMissed, entryStartPi, mainPi, hasSpaceAfter);
       renderCache[i] = { fp, nodes: newNodes };
     } else {
-      markPlacedNodes(renderCache[i].nodes, visibleMissed, entryStartPi, mainPi, hasPrimeAfter);
+      markPlacedNodes(renderCache[i].nodes, visibleMissed, entryStartPi, mainPi, hasSpaceAfter);
     }
 
     if (e.checked) {
@@ -2114,7 +2234,7 @@ function getModeRemaining(elapsed) {
     if (state.startTime === null) return state.bulletStartSeconds;
     if (state.bulletGameOver) return Math.max(0, state.bulletBudget - state.bulletFrozenAt);
     let remaining = state.bulletBudget - elapsed;
-    if (remaining <= 0) {
+    if (remaining <= 0 && !state.sequenceComplete) {
       endBullet();
       remaining = 0;
     }
@@ -2135,7 +2255,7 @@ function tickTime() {
     }
     statTime.classList.remove('frozen');
   } else {
-    if (state.mode === 'sprint' && state.gameLocked && !state.sprintEnded) {
+    if (state.mode === 'sprint' && state.gameLocked && !state.sprintEnded && !state.sequenceComplete) {
       const elapsedNow = (performance.now() - state.startTime) / 1000;
       if (elapsedNow >= SPRINT_LIMIT_SECONDS) {
         endSprint();
@@ -2143,7 +2263,9 @@ function tickTime() {
     }
 
     let elapsed;
-    if (state.sprintEnded && state.mode === 'sprint') {
+    if (state.sequenceComplete) {
+      elapsed = state.completeFrozenAt;
+    } else if (state.sprintEnded && state.mode === 'sprint') {
       elapsed = state.sprintFrozenAt;
     } else if (state.hardcoreFailed && state.mode === 'hardcore') {
       elapsed = state.hardcoreFrozenAt;
@@ -2157,12 +2279,18 @@ function tickTime() {
 
     statTime.classList.toggle('paused', state.mode === 'practice' && state.practicePaused);
 
-    const ended = state.sprintEnded || state.bulletGameOver;
+    const ended = state.sprintEnded || state.bulletGameOver || state.sequenceComplete;
     if (showCompTimerInline()) {
       const remaining = getModeRemaining(elapsed);
       statTime.textContent = formatTime(Math.max(0, remaining)) + ' remaining';
       statTime.classList.add('countdown');
       statTime.classList.toggle('frozen', ended);
+    } else if (state.sequenceComplete) {
+      // Finite completion (practice / hardcore, or sprint / bullet in high
+      // motion where the countdown lives in the big timer): frozen elapsed.
+      statTime.textContent = formatTime(elapsed) + ' elapsed';
+      statTime.classList.remove('countdown');
+      statTime.classList.add('frozen');
     } else if (state.mode === 'sprint') {
       const capped = Math.min(elapsed, SPRINT_LIMIT_SECONDS);
       statTime.textContent = formatTime(capped) + ' elapsed';
@@ -2189,6 +2317,8 @@ function tickTime() {
     let bigElapsed;
     if (state.startTime === null) {
       bigElapsed = 0;
+    } else if (state.sequenceComplete) {
+      bigElapsed = state.completeFrozenAt;
     } else if (state.sprintEnded && state.mode === 'sprint') {
       bigElapsed = state.sprintFrozenAt;
     } else if (state.bulletGameOver && state.mode === 'bullet') {
@@ -2197,9 +2327,9 @@ function tickTime() {
       bigElapsed = (performance.now() - state.startTime) / 1000;
     }
     const remaining = getModeRemaining(bigElapsed);
-    const ended = state.sprintEnded || state.bulletGameOver;
-    const active = (state.mode === 'sprint' && state.gameLocked) ||
-                   (state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver);
+    const ended = state.sprintEnded || state.bulletGameOver || state.sequenceComplete;
+    const active = (state.mode === 'sprint' && state.gameLocked && !state.sequenceComplete) ||
+                   (state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver && !state.sequenceComplete);
     compTimerEl.textContent = formatTime(remaining);
     compTimerEl.classList.toggle('ended', ended);
     compTimerEl.classList.toggle('danger', !ended && remaining <= 10 && active);
@@ -2212,13 +2342,17 @@ setInterval(tickTime, 250);
 function updateUI() {
   const hasEntries = state.entries.length > 0;
   const inputLocked = isInputLocked();
-  const sprintActive = state.mode === 'sprint' && state.gameLocked && !state.sprintEnded;
-  const hardcoreActive = state.mode === 'hardcore' && state.startTime !== null && !state.hardcoreFailed;
-  const practiceActive = state.mode === 'practice' && state.startTime !== null && !state.practicePaused;
+  // A finished finite run (e.g. the emergency number) is its own terminal
+  // state: no mode is "active" (so the Stop/Pause button hides), and Reset
+  // is promoted like a game-over.
+  const complete = state.sequenceComplete;
+  const sprintActive = state.mode === 'sprint' && state.gameLocked && !state.sprintEnded && !complete;
+  const hardcoreActive = state.mode === 'hardcore' && state.startTime !== null && !state.hardcoreFailed && !complete;
+  const practiceActive = state.mode === 'practice' && state.startTime !== null && !state.practicePaused && !complete;
   const gameOver = (state.mode === 'sprint' && state.sprintEnded) ||
                    (state.mode === 'hardcore' && state.hardcoreFailed) ||
                    (state.mode === 'bullet' && state.bulletGameOver);
-  const bulletActive = state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver;
+  const bulletActive = state.mode === 'bullet' && state.startTime !== null && !state.bulletGameOver && !complete;
 
   // Keep the settings panel's mode radio in sync with state.mode in case
   // state was changed programmatically (Continue button, etc.)
@@ -2259,9 +2393,9 @@ function updateUI() {
 
   continueBtn.hidden = !gameOver;
 
-  // On game over the user's natural action is to start over, so make Reset
-  // the prominent button and demote Continue.
-  resetBtn.classList.toggle('primary', gameOver);
+  // On game over — or a finished finite run — the user's natural action is
+  // to start over, so make Reset the prominent button and demote Continue.
+  resetBtn.classList.toggle('primary', gameOver || complete);
   continueBtn.classList.toggle('secondary', gameOver);
   // Big top timer is used in sprint AND bullet, but only in high
   // motion. Medium/low fold the countdown into the bottom-right
@@ -2278,9 +2412,9 @@ function updateUI() {
   // low-motion practice (the user can click to reveal).
   statTime.classList.toggle('dimmed', state.elapsedDimmed && !state.sprintEnded && !state.hardcoreFailed);
 
-  // Cursor: hidden on pause / game-over (any mode), so the display reads
-  // as static rather than "still typing".
-  const cursorHidden = state.practicePaused || gameOver;
+  // Cursor: hidden on pause / game-over / completion (any mode), so the
+  // display reads as static rather than "still typing".
+  const cursorHidden = state.practicePaused || gameOver || complete;
   if (cursorEl) cursorEl.classList.toggle('hidden', cursorHidden);
 
   // Keypad hide toggle: collapses the keypads to recover vertical room.
@@ -2302,9 +2436,9 @@ function updateUI() {
     bulletSettingsEl.classList.toggle('locked', bulletLocked);
   }
 
-  // Zen reveals the stats only on pause or game-over.
+  // Zen reveals the stats only on pause, game-over, or a finished run.
   document.documentElement.classList.toggle('zen-reveal',
-    state.motionMode === 'zen' && (state.practicePaused || gameOver));
+    state.motionMode === 'zen' && (state.practicePaused || gameOver || complete));
 
   updateModeHint();
   updateModeBadge();
