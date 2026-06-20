@@ -148,6 +148,13 @@ test('primes-spaced: commas are accepted and recorded as spaces', async ({ page 
   await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
+test('reset returns the keypad hint to "digit 1"', async ({ page }) => {
+  await page.keyboard.type('1415');
+  await expect(page.locator('#keypad-hint')).toContainText('digit 5');
+  await page.locator('#reset-btn').click();
+  await expect(page.locator('#keypad-hint')).toContainText('digit 1');
+});
+
 test('pi: typing the first digits scores correct', async ({ page }) => {
   await page.keyboard.type('14159');
   await page.keyboard.press('Enter');

@@ -1083,6 +1083,9 @@ function clearSession() {
   state.erasedPreCheck = 0;
   state.correctedPositions.clear();
   state.integerCharsConsumed = 0;
+  // Reset the "next position" so the keypad hint returns to "digit 1" — render
+  // doesn't recompute it when there are no entries.
+  state.nextSeqIdx = 0;
   state.compTimerHidden = false;
   state.bulletBudget = state.bulletStartSeconds;
   state.bulletGameOver = false;
