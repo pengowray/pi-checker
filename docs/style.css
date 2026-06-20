@@ -665,11 +665,19 @@ input[type="range"]:disabled {
 }
 
 /* Each byte value is a right-aligned fixed-width cell; equal widths make the
-   wrapped rows line up into columns. 3ch fits 0–255; the margin is the gap. */
+   wrapped rows line up into columns. 3ch fits 0–255 (max 3 digits / "0377"
+   octal also stays in step via its own cell). */
 .pi-display.code-mode .doom-cell {
   display: inline-block;
-  min-width: 3ch;
+  min-width: 4ch; /* fits 3-digit decimal and 4-char octal ("0377") alike */
   text-align: right;
+}
+
+/* Faint comma after each value so the listing reads as valid C. It hugs the
+   number; its right margin is the inter-column gap. */
+.pi-display.code-mode .doom-comma {
+  color: var(--code-punct);
+  opacity: 0.5;
   margin-right: 1ch;
 }
 

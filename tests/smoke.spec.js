@@ -1,5 +1,28 @@
 const { test, expect } = require('@playwright/test');
 
+// DOOM's M_Random rndtable[256] — must match setupDoom() in script.js.
+const DOOM_RND = [
+  0, 8, 109, 220, 222, 241, 149, 107, 75, 248, 254, 140, 16, 66,
+  74, 21, 211, 47, 80, 242, 154, 27, 205, 128, 161, 89, 77, 36,
+  95, 110, 85, 48, 212, 140, 211, 249, 22, 79, 200, 50, 28, 188,
+  52, 140, 202, 120, 68, 145, 62, 70, 184, 190, 91, 197, 152, 224,
+  149, 104, 25, 178, 252, 182, 202, 182, 141, 197, 4, 81, 181, 242,
+  145, 42, 39, 227, 156, 198, 225, 193, 219, 93, 122, 175, 249, 0,
+  175, 143, 70, 239, 46, 246, 163, 53, 163, 109, 168, 135, 2, 235,
+  25, 92, 20, 145, 138, 77, 69, 166, 78, 176, 173, 212, 166, 113,
+  94, 161, 41, 50, 239, 49, 111, 164, 70, 60, 2, 37, 171, 75,
+  136, 156, 11, 56, 42, 146, 138, 229, 73, 146, 77, 61, 98, 196,
+  135, 106, 63, 197, 195, 86, 96, 203, 113, 101, 170, 247, 181, 113,
+  80, 250, 108, 7, 255, 237, 129, 226, 79, 107, 112, 166, 103, 241,
+  24, 223, 239, 120, 198, 58, 60, 82, 128, 3, 184, 66, 143, 224,
+  145, 224, 81, 206, 163, 45, 63, 90, 168, 114, 59, 33, 159, 95,
+  28, 139, 123, 98, 125, 196, 15, 70, 194, 253, 54, 14, 109, 226,
+  71, 17, 161, 93, 186, 87, 244, 138, 20, 52, 123, 251, 26, 36,
+  17, 46, 52, 231, 232, 76, 31, 221, 84, 37, 216, 165, 212, 106,
+  197, 242, 98, 43, 39, 175, 254, 145, 190, 84, 118, 222, 187, 136,
+  120, 163, 236, 249,
+];
+
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
@@ -127,26 +150,37 @@ test('doom: shows the C header, aligned cells, and a comma key (not space)', asy
   await expect(page.locator('#user-digits .doom-cell')).toHaveCount(3);
 });
 
-test('doom: a separator after the final value closes the array (}; + lock)', async ({ page }) => {
+test('doom: a byte may be entered in octal (leading 0 + octal conversion)', async ({ page }) => {
   await setSequence(page, 'doom');
-  // How many chars (digits + separators) the table holds.
-  await page.locator('#settings-toggle').click();
-  const hint = await page.locator('#sequence-digits-hint').textContent();
-  await page.locator('#settings-close').click();
-  const total = parseInt(hint.replace(/[^0-9]/g, ''), 10);
-  // Skip everything but the final digit, type it, then close with a comma.
-  await page.locator('#stat-skipped-tile').click();
-  await page.locator('#skip-count').fill(String(total - 1));
-  await page.locator('#skip-confirm').click();
-  await page.keyboard.type('9'); // last value is 249 → final char "9"
-  // DOOM finishes on the separator, not the last digit — not done yet.
-  await expect(page.locator('#pi-display')).not.toHaveClass(/run-complete/);
-  await page.keyboard.press(',');
+  // Byte 0 = 0, byte 1 = 8. Enter byte 1 as octal "010" (= 8) → all green.
+  await page.keyboard.type('0 010');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('5');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  // A wrong octal value is flagged: "011" is octal 9, not 8.
+  await page.locator('#reset-btn').click();
+  await page.keyboard.type('0 011');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
+});
+
+test('doom: faint commas are rendered between values', async ({ page }) => {
+  await setSequence(page, 'doom');
+  await page.keyboard.type('0 8 109'); // three values → two separators
+  await expect(page.locator('#user-digits .doom-comma')).toHaveCount(2);
+});
+
+test('doom: entering the whole table finishes the run (}; + lock), no trailing separator', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // Paste the full decimal table; the final byte 249 completes it on its own
+  // last digit — no trailing separator needed.
+  await page.evaluate((text) => {
+    const dt = new DataTransfer();
+    dt.setData('text', text);
+    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+  }, DOOM_RND.join(' '));
   await expect(page.locator('#pi-display')).toHaveClass(/run-complete/);
-  // Reached the end via skip, so it's a (correct) "not a perfect run" finish.
-  await expect(page.locator('#keypad-hint')).toHaveText(/Complete|Finished/);
   await expect(page.locator('#keypad-decimal .key[data-digit="1"]')).toBeDisabled();
-  await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
 });
 
 test('primes-spaced: commas are accepted and recorded as spaces', async ({ page }) => {

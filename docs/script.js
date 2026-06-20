@@ -249,14 +249,15 @@ const SEQUENCES = {
     lenientEnd: true,
   },
   // 🎮 DOOM's M_Random rndtable[256] — the fixed pseudo-random table from the
-  // id Software source. Finite (256 values), entered as space-separated
-  // numbers; commaIsSpace lets you type (or paste) the canonical comma-and-
-  // space form too — a comma is recorded as the separating space. digits
-  // filled by setupDoom().
+  // id Software source. Finite (256 bytes), scored value-by-value: each byte
+  // is accepted as decimal OR octal (a leading 0 followed by the octal form).
+  // Separators between bytes are space or comma, interchangeable; extra ones
+  // don't penalise. bytes/digits filled by setupDoom().
   doom: {
     label: 'DOOM rndtable',
     shortLabel: 'DOOM rndtable',
     hintLabel: 'DOOM’s M_Random rndtable',
+    hintUnit: 'value',
     titleHtml: 'DOOM rndtable',
     integerPart: '',
     // The given C declaration line, shown as a syntax-coloured header above
@@ -268,15 +269,14 @@ const SEQUENCES = {
     alphabet: '0123456789 ,',
     keypadType: 'decimal',
     digits: '',          // filled by setupDoom()
+    bytes: null,         // filled by setupDoom()
     naturalSpaces: true,
     finite: true,
     commaIsSpace: true,
-    // Render byte values in aligned columns with C-like colours, and finish
-    // (add the }; line, celebrate, stop the clock) when a separator is
-    // pressed after the final value — rather than mid-number on its last
-    // digit. The keypad shows a comma key instead of a space.
+    // Render byte values in aligned columns with C-like colours and faint
+    // commas (valid C); the run finishes the moment the final byte (249) is
+    // fully entered — it's 3 digits, so no trailing separator is needed.
     codeColumns: true,
-    completeOnSeparator: true,
     commaKey: true,
   },
 };
@@ -379,6 +379,9 @@ deriveTau();
     197, 242,  98,  43,  39, 175, 254, 145, 190,  84, 118, 222, 187, 136,
     120, 163, 236, 249,
   ];
+  // bytes drives byte-level scoring (decimal or octal per value); digits is
+  // the decimal join, kept for the settings digit-count hint.
+  SEQUENCES.doom.bytes = rnd;
   SEQUENCES.doom.digits = rnd.join(' ');
 })();
 
@@ -781,6 +784,9 @@ function nextPiIdx() {
 
 function canSkip() {
   if (isInputLocked()) return false;
+  // Byte-level sequences (DOOM) accept decimal or octal, so "skip the next
+  // decimal char" is ill-defined — disable skipping for them.
+  if (SEQUENCES[state.sequenceId] && SEQUENCES[state.sequenceId].bytes) return false;
   if (nextPiIdx() >= state.digits.length) return false;
   if ((state.mode === 'sprint' || state.mode === 'hardcore') && state.startTime !== null) return false;
   return true;
@@ -1166,7 +1172,8 @@ function updateKeypadHint() {
     return;
   }
   const idx = (state.nextSeqIdx || 0) + 1;
-  keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + (def.hintLabel || def.shortLabel || def.label) + ':';
+  const unit = def.hintUnit || 'digit';
+  keypadHintEl.textContent = 'Enter ' + unit + ' ' + idx + ' of ' + (def.hintLabel || def.shortLabel || def.label) + ':';
 }
 
 function updateModeHint() {
@@ -1409,6 +1416,12 @@ function maybeCompleteFinite() {
   if (state.entries.length === 0) return false;
   const last = state.entries[state.entries.length - 1];
   if (!last) return false;
+  // Byte-level (DOOM): finishes when the final byte is fully entered (its
+  // decimal or octal form), set by computeByteStatuses.
+  if (def.bytes) {
+    if (state.doomFinalComplete) { completeFiniteSequence(); return true; }
+    return false;
+  }
   // Lenient finish: the sequence's final digit, typed at or beyond the final
   // position, ends the run even after an earlier slip or overshoot — e.g. the
   // emergency number ends the moment a "3" lands as (or after) the 20th digit.
@@ -1482,19 +1495,6 @@ function inputDigit(d) {
     if (state.entries.length === 0) return;
     const last = state.entries[state.entries.length - 1];
     if (last.char === ' ') return;
-    // Code sequences (DOOM) finish on the separator pressed *after* the final
-    // value: close the array (add };), celebrate, stop the clock — rather than
-    // recording a trailing separator. A trailing separator once everything is
-    // entered is swallowed (no penalty) whether or not it completes.
-    const def = SEQUENCES[state.sequenceId];
-    if (def && def.completeOnSeparator && !state.sequenceComplete &&
-        (state.nextSeqIdx || 0) >= state.digits.length) {
-      if (last.status === 'correct') {
-        completeFiniteSequence();
-        render();
-      }
-      return;
-    }
   }
 
   practiceResume();
@@ -1524,12 +1524,10 @@ function inputDigit(d) {
   state.undoStack.push({ entriesLengthBefore, text: d, wasPaste: false });
   if (!isApplyingHistory) state.redoStack.length = 0;
   computeStatuses(state.entries.length - 1);
-  // Finished a finite sequence with this (correct) digit? Lock the run and
-  // skip the usual auto-check scheduling — it's already all checked. Code
-  // sequences (DOOM) instead finish on the separator pressed after the last
-  // value (handled above), so they opt out of digit-triggered completion.
-  const seqDef = SEQUENCES[state.sequenceId];
-  if (!(seqDef && seqDef.completeOnSeparator) && maybeCompleteFinite()) {
+  // Finished a finite sequence with this digit (the emergency number's final
+  // 3, or DOOM's final byte)? Lock the run and skip the usual auto-check
+  // scheduling — it's already all checked.
+  if (maybeCompleteFinite()) {
     render();
     return;
   }
@@ -1912,6 +1910,74 @@ function markAllChecked() {
   for (const e of state.entries) e.checked = true;
 }
 
+// ---- Byte-level status computation (DOOM) ----
+//
+// Entries are split into byte tokens on separators (space, with commas already
+// canonicalised to spaces). Token k is scored against byte value k, accepting
+// EITHER the decimal form ("249") OR the C octal form (a leading 0 then the
+// octal digits, e.g. "0371"). Each character is green while the token so far
+// is a valid prefix of one of those forms, red once it diverges. The run is
+// complete the instant the final byte's token exactly equals one of its forms
+// — for 249 that's its last digit, so no trailing separator is needed.
+function computeByteStatuses(def) {
+  const bytes = def.bytes;
+  const entries = state.entries;
+  let byteIdx = 0;      // which target byte the current token maps to
+  let tokenStr = '';    // chars accumulated for the current token
+  let tokenEntries = [];
+  state.doomFinalComplete = false;
+
+  function repsFor(idx) {
+    if (idx >= bytes.length) return null;
+    const V = bytes[idx];
+    return { dec: String(V), oct: '0' + V.toString(8) };
+  }
+
+  function scoreToken() {
+    const reps = repsFor(byteIdx);
+    if (!reps) {
+      for (const e of tokenEntries) { e.status = 'wrong'; e.expected = null; }
+      return;
+    }
+    let valid = true;
+    for (let i = 0; i < tokenEntries.length; i++) {
+      const pre = tokenStr.slice(0, i + 1);
+      const ok = valid && (reps.dec.startsWith(pre) || reps.oct.startsWith(pre));
+      tokenEntries[i].status = ok ? 'correct' : 'wrong';
+      tokenEntries[i].expected = reps.dec;
+      if (!ok) valid = false;
+    }
+    if (byteIdx === bytes.length - 1 &&
+        (tokenStr === reps.dec || tokenStr === reps.oct)) {
+      state.doomFinalComplete = true;
+    }
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    // Fields the shared render/backspace bookkeeping may read.
+    e.missedBefore = [];
+    e.skipConfirms = false;
+    e.corrected = false;
+    e.correctNoSkip = false;
+    e.seqIdxAfter = i + 1;
+    if (e.char === ' ') {
+      scoreToken();
+      e.status = tokenEntries.length > 0 ? 'correct' : 'wrong';
+      e.expected = null;
+      byteIdx++;
+      tokenStr = '';
+      tokenEntries = [];
+    } else {
+      tokenStr += e.char;
+      tokenEntries.push(e);
+    }
+  }
+  scoreToken(); // the trailing (in-progress) token
+  // The keypad hint counts values (bytes), not characters.
+  state.nextSeqIdx = byteIdx;
+}
+
 // ---- Status computation ----
 //
 // `fromIdx` is the lowest index that may have changed since the last call.
@@ -1921,6 +1987,12 @@ function markAllChecked() {
 // of typing — this lets us touch only the tail. Pass 0 for a full
 // recompute (the default).
 function computeStatuses(fromIdx = 0) {
+  // Byte-level sequences (DOOM) score whole values, not single positions, and
+  // accept octal — a different model entirely. They're short, so always do a
+  // full rescore.
+  const seqDef = SEQUENCES[state.sequenceId];
+  if (seqDef && seqDef.bytes) { computeByteStatuses(seqDef); return; }
+
   const entries = state.entries;
   const digits = state.digits;
   // Re-analyze starting 2 entries earlier so lookahead-affected entries
@@ -2409,7 +2481,18 @@ function renderCodeColumns() {
   let cell = null; // current number's <span class="doom-cell">
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    if (e.char === ' ') { cell = null; continue; } // separator → end of cell
+    if (e.char === ' ') {
+      // Separator → end of this value. Render a faint comma after it so the
+      // output reads as valid C ("0, 8, 109, …").
+      if (cell) {
+        const comma = document.createElement('span');
+        comma.className = 'doom-comma';
+        comma.textContent = ',';
+        userDigitsEl.appendChild(comma);
+      }
+      cell = null;
+      continue;
+    }
     if (!cell) {
       cell = document.createElement('span');
       cell.className = 'doom-cell';
