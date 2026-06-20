@@ -37,7 +37,7 @@
   </script>
   <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
        stale script.css/js for up to 10 min after a push. -->
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <header>
@@ -103,6 +103,9 @@
       <button class="key" data-digit="0">0</button>
       <button class="key key-back" data-action="back" aria-label="Backspace">&#x232B;</button>
       <button class="key key-space" data-digit=" " aria-label="Space">&#x2423;</button>
+      <!-- Comma separator key, shown instead of the space key for comma-style
+           code sequences (DOOM). Emits "," which is recorded as a space. -->
+      <button class="key key-comma" data-digit="," aria-label="Comma">,</button>
     </section>
 
     <section class="keypad keypad-hex" id="keypad-hex" role="group" aria-label="Hex keypad" hidden>
@@ -171,6 +174,7 @@
             <option value="champernowne">Champernowne&rsquo;s constant</option>
             <option value="less-than-3">&lt;3 (less than 3)</option>
             <option value="emergency">New emergency services number</option>
+            <option value="doom">DOOM rndtable</option>
           </select>
           <small id="sequence-digits-hint" class="hint"></small>
         </div>
@@ -436,7 +440,7 @@
     </div>
   </div>
 
-  <script src="sequences.js?v=4"></script>
-  <script src="script.js?v=4"></script>
+  <script src="sequences.js?v=5"></script>
+  <script src="script.js?v=5"></script>
 </body>
 </html>

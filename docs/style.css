@@ -13,6 +13,11 @@
   --key-active: #e2e8f0;
   --border: #e5e7eb;
   --shadow: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.08);
+  /* C-source syntax colours (DOOM rndtable), VS Code "light" token palette. */
+  --code-type: #0000ff;
+  --code-ident: #267f99;
+  --code-num: #098658;
+  --code-punct: #6b6b6b;
 }
 
 [data-theme="dark"] {
@@ -30,6 +35,11 @@
   --key-active: #2f3542;
   --border: #2a2f3a;
   --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+  /* C-source syntax colours (DOOM rndtable), VS Code "dark" token palette. */
+  --code-type: #569cd6;
+  --code-ident: #9cdcfe;
+  --code-num: #b5cea8;
+  --code-punct: #8a8f99;
 }
 
 * { box-sizing: border-box; }
@@ -625,6 +635,58 @@ input[type="range"]:disabled {
   min-width: 0.45em;
 }
 
+/* ---- DOOM rndtable: C-source code styling ------------------------------
+   The display mimics the array's C source — a coloured declaration header,
+   byte values right-aligned in fixed-width columns, and a closing }; once
+   the run completes (see the renderCodeColumns renderer). */
+
+/* C-token colours used in the header (and the correct numbers below). */
+.c-type { color: var(--code-type); }
+.c-ident { color: var(--code-ident); }
+.c-num { color: var(--code-num); }
+.c-punct { color: var(--code-punct); }
+
+/* Stack the header above the grid, and indent the values like the source. */
+.pi-display.code-mode .pi-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+.pi-display.code-mode .prefix {
+  display: block;
+  opacity: 1;
+  margin-bottom: 0.2em;
+}
+.pi-display.code-mode .pi-body {
+  padding-left: 1.5em;
+  /* Drop the display's 0.04em letter-spacing here so each 3-char column is
+     exactly 3ch — otherwise 3-digit cells outgrow min-width and the columns
+     drift out of alignment. */
+  letter-spacing: normal;
+}
+
+/* Each byte value is a right-aligned fixed-width cell; equal widths make the
+   wrapped rows line up into columns. 3ch fits 0–255; the margin is the gap. */
+.pi-display.code-mode .doom-cell {
+  display: inline-block;
+  min-width: 3ch;
+  text-align: right;
+  margin-right: 1ch;
+}
+
+/* Correct values read as numeric literals; wrong/pending keep their feedback
+   colours so the checker is still legible. */
+.pi-display.code-mode .digit.correct { color: var(--code-num); }
+.pi-display.code-mode .digit.correct.skipped { color: var(--fg); opacity: 0.85; }
+
+/* The closing }; appears (left-aligned, below the grid) only once the array
+   is finished — the renderer toggles .run-complete. */
+.pi-display.code-mode.run-complete .pi-body::after {
+  content: "};";
+  display: block;
+  color: var(--code-punct);
+  margin-top: 0.1em;
+}
+
 .cursor {
   display: inline-block;
   color: var(--accent);
@@ -1073,9 +1135,11 @@ input[type="range"]:disabled {
     "kc k0 kb";
 }
 
-/* When the current sequence treats spaces as input (e.g. primes-spaced),
-   show an extra full-width spacebar row below the standard 3x4 grid. */
-.keypad-decimal.with-space {
+/* When the current sequence treats spaces as input (e.g. primes-spaced), or
+   shows a comma separator key (DOOM), add a full-width separator row below
+   the standard 3x4 grid. */
+.keypad-decimal.with-space,
+.keypad-decimal.with-comma {
   grid-template-areas:
     "k1 k2 k3"
     "k4 k5 k6"
@@ -1083,7 +1147,8 @@ input[type="range"]:disabled {
     "kc k0 kb"
     "ksp ksp ksp";
 }
-.keypad-decimal.with-space.flipped {
+.keypad-decimal.with-space.flipped,
+.keypad-decimal.with-comma.flipped {
   grid-template-areas:
     "k7 k8 k9"
     "k4 k5 k6"
@@ -1092,8 +1157,11 @@ input[type="range"]:disabled {
     "ksp ksp ksp";
 }
 
-.keypad [data-digit=" "] { grid-area: ksp; }
+/* Both separator keys occupy the same row slot; only the active one shows. */
+.keypad [data-digit=" "],
+.keypad [data-digit=","] { grid-area: ksp; }
 .keypad-decimal:not(.with-space) [data-digit=" "] { display: none; }
+.keypad-decimal:not(.with-comma) [data-digit=","] { display: none; }
 
 /* Jameco JE600-style hex keypad: A-F across the top, decimal digits in
    a 3-column phone layout below them with the trailing hex digits filling

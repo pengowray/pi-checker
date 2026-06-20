@@ -201,10 +201,12 @@ const SEQUENCES = {
     // user starts entering at "3".
     integerPart: '2 ',
     prefix: '2 ',
-    alphabet: '0123456789 ',
+    // Comma is accepted but recorded as the separating space (commaIsSpace).
+    alphabet: '0123456789 ,',
     keypadType: 'decimal',
     digits: '',
     naturalSpaces: true,
+    commaIsSpace: true,
   },
   // ♥ Easter egg: any number that starts with "2." is less than 3, so every
   // digit you type is accepted as correct (see acceptAny in computeStatuses).
@@ -242,6 +244,37 @@ const SEQUENCES = {
     naturalSpaces: true,
     finite: true,
     phoneLetters: true,
+  },
+  // 🎮 DOOM's M_Random rndtable[256] — the fixed pseudo-random table from the
+  // id Software source. Finite (256 values), entered as space-separated
+  // numbers; commaIsSpace lets you type (or paste) the canonical comma-and-
+  // space form too — a comma is recorded as the separating space. digits
+  // filled by setupDoom().
+  doom: {
+    label: 'DOOM rndtable',
+    shortLabel: 'DOOM rndtable',
+    hintLabel: 'DOOM’s M_Random rndtable',
+    titleHtml: 'DOOM rndtable',
+    integerPart: '',
+    // The given C declaration line, shown as a syntax-coloured header above
+    // the grid (prefixHtml renders as HTML rather than text).
+    prefixHtml: '<span class="c-type">unsigned char</span> ' +
+      '<span class="c-ident">rndtable</span><span class="c-punct">[</span>' +
+      '<span class="c-num">256</span><span class="c-punct">]</span> ' +
+      '<span class="c-punct">=</span> <span class="c-punct">{</span>',
+    alphabet: '0123456789 ,',
+    keypadType: 'decimal',
+    digits: '',          // filled by setupDoom()
+    naturalSpaces: true,
+    finite: true,
+    commaIsSpace: true,
+    // Render byte values in aligned columns with C-like colours, and finish
+    // (add the }; line, celebrate, stop the clock) when a separator is
+    // pressed after the final value — rather than mid-number on its last
+    // digit. The keypad shows a comma key instead of a space.
+    codeColumns: true,
+    completeOnSeparator: true,
+    commaKey: true,
   },
 };
 
@@ -318,6 +351,34 @@ deriveTau();
   SEQUENCES['less-than-3'].digits = '9'.repeat(10000);
 })();
 
+(function setupDoom() {
+  // DOOM's M_Random rndtable[256], verbatim from id Software's m_random.c.
+  // The array literal is the source of truth; join with spaces so it's
+  // entered like primes-spaced (digits + separators), one value at a time.
+  const rnd = [
+      0,   8, 109, 220, 222, 241, 149, 107,  75, 248, 254, 140,  16,  66,
+     74,  21, 211,  47,  80, 242, 154,  27, 205, 128, 161,  89,  77,  36,
+     95, 110,  85,  48, 212, 140, 211, 249,  22,  79, 200,  50,  28, 188,
+     52, 140, 202, 120,  68, 145,  62,  70, 184, 190,  91, 197, 152, 224,
+    149, 104,  25, 178, 252, 182, 202, 182, 141, 197,   4,  81, 181, 242,
+    145,  42,  39, 227, 156, 198, 225, 193, 219,  93, 122, 175, 249,   0,
+    175, 143,  70, 239,  46, 246, 163,  53, 163, 109, 168, 135,   2, 235,
+     25,  92,  20, 145, 138,  77,  69, 166,  78, 176, 173, 212, 166, 113,
+     94, 161,  41,  50, 239,  49, 111, 164,  70,  60,   2,  37, 171,  75,
+    136, 156,  11,  56,  42, 146, 138, 229,  73, 146,  77,  61,  98, 196,
+    135, 106,  63, 197, 195,  86,  96, 203, 113, 101, 170, 247, 181, 113,
+     80, 250, 108,   7, 255, 237, 129, 226,  79, 107, 112, 166, 103, 241,
+     24, 223, 239, 120, 198,  58,  60,  82, 128,   3, 184,  66, 143, 224,
+    145, 224,  81, 206, 163,  45,  63,  90, 168, 114,  59,  33, 159,  95,
+     28, 139, 123,  98, 125, 196,  15,  70, 194, 253,  54,  14, 109, 226,
+     71,  17, 161,  93, 186,  87, 244, 138,  20,  52, 123, 251,  26,  36,
+     17,  46,  52, 231, 232,  76,  31, 221,  84,  37, 216, 165, 212, 106,
+    197, 242,  98,  43,  39, 175, 254, 145, 190,  84, 118, 222, 187, 136,
+    120, 163, 236, 249,
+  ];
+  SEQUENCES.doom.digits = rnd.join(' ');
+})();
+
 // ---- Constants ----
 // Sprint uses per-digit auto-check at SPRINT_PER_DIGIT_SECONDS
 // (defined below). Hardcore and Bullet are instant (0) — bullet's
@@ -383,6 +444,7 @@ const state = {
   alphabet: SEQUENCES.pi.alphabet,
   keypadType: SEQUENCES.pi.keypadType,
   acceptAny: !!SEQUENCES.pi.acceptAny, // <3 mode: every typed digit counts as correct
+  commaIsSpace: !!SEQUENCES.pi.commaIsSpace, // typed comma recorded as a space
   integerCharsConsumed: 0, // how many leading integer-part chars the user has typed
   mode: 'practice',
   autoCheckSeconds: DEFAULT_PRACTICE_DELAY,
@@ -767,18 +829,34 @@ function applySequence(id) {
   state.alphabet = def.alphabet;
   state.keypadType = def.keypadType;
   state.acceptAny = !!def.acceptAny;
+  // Comma/space interchangeable separators (DOOM, primes-spaced): a typed
+  // comma is recorded as the canonical space.
+  state.commaIsSpace = !!def.commaIsSpace;
   state.integerCharsConsumed = 0;
-  const prefixText = def.prefix != null
-    ? def.prefix
-    : (def.integerPart ? def.integerPart + '.' : '');
-  prefixEl.textContent = prefixText;
-  prefixEl.hidden = !prefixText;
+  // prefixHtml (e.g. DOOM's C declaration line) renders as HTML; otherwise the
+  // prefix/integer part is plain text.
+  if (def.prefixHtml != null) {
+    prefixEl.innerHTML = def.prefixHtml;
+    prefixEl.hidden = false;
+  } else {
+    const prefixText = def.prefix != null
+      ? def.prefix
+      : (def.integerPart ? def.integerPart + '.' : '');
+    prefixEl.textContent = prefixText;
+    prefixEl.hidden = !prefixText;
+  }
   appTitleEl.innerHTML = def.titleHtml;
+  // Code-source styling (DOOM): aligned columns + C-like colours. Clear the
+  // run-complete flag (the }; line) — a fresh sequence is never pre-finished.
+  piDisplayEl.classList.toggle('code-mode', !!def.codeColumns);
+  piDisplayEl.classList.remove('run-complete');
   // Swap keypad layout
   keypadDecimal.hidden = def.keypadType !== 'decimal';
   keypadHex.hidden = def.keypadType !== 'hex';
-  // Show the space key only when the alphabet uses spaces.
-  keypadDecimal.classList.toggle('with-space', def.alphabet.includes(' '));
+  // Separator key in the bottom row: a comma key for comma-separated code
+  // sequences (DOOM), otherwise the space key when the alphabet uses spaces.
+  keypadDecimal.classList.toggle('with-comma', !!def.commaKey);
+  keypadDecimal.classList.toggle('with-space', def.alphabet.includes(' ') && !def.commaKey);
   // Faint phone-keypad letters (ABC/DEF…) for sequences that opt in.
   keypadDecimal.classList.toggle('phone-letters', !!def.phoneLetters);
   // Keep the settings dropdown in sync — browsers restore form values
@@ -1364,6 +1442,8 @@ function celebrateComplete() {
 function inputDigit(d) {
   if (isInputLocked()) return;
   d = d.toUpperCase();
+  // Comma/space interchangeable: a typed comma becomes the canonical space.
+  if (state.commaIsSpace && d === ',') d = ' ';
   if (!state.alphabet.includes(d)) return;
 
   // Silently absorb leading integer-part chars (e.g. user types "3" first
@@ -1378,11 +1458,25 @@ function inputDigit(d) {
   }
 
   // Collapse consecutive spaces: a second space in a row is silently ignored
-  // so users don't get penalised for double-tapping the space bar.
+  // so users don't get penalised for double-tapping the space bar (or mixing
+  // commas and spaces).
   if (d === ' ') {
     if (state.entries.length === 0) return;
     const last = state.entries[state.entries.length - 1];
     if (last.char === ' ') return;
+    // Code sequences (DOOM) finish on the separator pressed *after* the final
+    // value: close the array (add };), celebrate, stop the clock — rather than
+    // recording a trailing separator. A trailing separator once everything is
+    // entered is swallowed (no penalty) whether or not it completes.
+    const def = SEQUENCES[state.sequenceId];
+    if (def && def.completeOnSeparator && !state.sequenceComplete &&
+        (state.nextSeqIdx || 0) >= state.digits.length) {
+      if (last.status === 'correct') {
+        completeFiniteSequence();
+        render();
+      }
+      return;
+    }
   }
 
   practiceResume();
@@ -1413,8 +1507,14 @@ function inputDigit(d) {
   if (!isApplyingHistory) state.redoStack.length = 0;
   computeStatuses(state.entries.length - 1);
   // Finished a finite sequence with this (correct) digit? Lock the run and
-  // skip the usual auto-check scheduling — it's already all checked.
-  if (maybeCompleteFinite()) { render(); return; }
+  // skip the usual auto-check scheduling — it's already all checked. Code
+  // sequences (DOOM) instead finish on the separator pressed after the last
+  // value (handled above), so they opt out of digit-triggered completion.
+  const seqDef = SEQUENCES[state.sequenceId];
+  if (!(seqDef && seqDef.completeOnSeparator) && maybeCompleteFinite()) {
+    render();
+    return;
+  }
   if (useOnIdleAutoCheck()) {
     resetAutoCheckTimer();
   } else {
@@ -1429,7 +1529,10 @@ function inputDigit(d) {
 
 function inputPaste(text) {
   if (isInputLocked()) return;
-  const upper = text.toUpperCase();
+  let upper = text.toUpperCase();
+  // Comma/space interchangeable: normalize commas to spaces before parsing so
+  // pasting the canonical "0, 8, 109, …" form is collapsed to single spaces.
+  if (state.commaIsSpace) upper = upper.replace(/,/g, ' ');
   const digits = [];
   // Track the previous char so we can collapse consecutive spaces in the
   // pasted text (mirroring how live typing ignores double-spaces). Seed with
@@ -2063,6 +2166,9 @@ function render() {
   lastPaddedGroup = null;
 
   const def = SEQUENCES[state.sequenceId];
+  // Code-source sequences (DOOM) use a dedicated column renderer rather than
+  // the inline incremental one — they're short, so a full rebuild is cheap.
+  if (def && def.codeColumns) { renderCodeColumns(); return; }
   // Sequences with their own natural spacing (e.g. primes, the emergency
   // number) override the user-selected grouping — their space boundaries
   // are the grouping.
@@ -2230,17 +2336,88 @@ function render() {
     piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
   });
 
+  updateStatTiles({ correct, wrong, missed, skipped, fixed });
+
+  updateUI();
+}
+
+// Tally the scored buckets from checked entries. Shared by the incremental
+// renderer and the DOOM column renderer.
+function countStats(entries) {
+  let correct = 0, wrong = 0, missed = 0, skipped = 0, fixed = 0;
+  for (const e of entries) {
+    if (!e.checked) continue;
+    missed += e.missedBefore.length;
+    if (e.status === 'correct') {
+      if (e.corrected) fixed += 1;
+      else if (e.skipped) skipped += 1;
+      else correct += 1;
+    } else if (e.status === 'wrong') {
+      wrong += 1;
+    }
+  }
+  return { correct, wrong, missed, skipped, fixed };
+}
+
+function updateStatTiles(s) {
   const zeroDash = (n) => (n ? String(n) : '—');
-  statCorrect.textContent = zeroDash(correct);
-  statWrong.textContent = zeroDash(wrong);
-  statMissed.textContent = zeroDash(missed);
-  statSkipped.textContent = zeroDash(skipped);
-  statFixed.textContent = zeroDash(fixed);
+  statCorrect.textContent = zeroDash(s.correct);
+  statWrong.textContent = zeroDash(s.wrong);
+  statMissed.textContent = zeroDash(s.missed);
+  statSkipped.textContent = zeroDash(s.skipped);
+  statFixed.textContent = zeroDash(s.fixed);
   // Doubles as a key for the dotted underline on corrected digits.
   // Hardcore and sprint don't allow the backspace-then-retype path
   // so they'll never have fixed > 0; bullet and practice will.
-  statFixed.classList.toggle('corrected', fixed > 0);
+  statFixed.classList.toggle('corrected', s.fixed > 0);
+}
 
+// ---- DOOM code-column renderer ----
+// DOOM's rndtable is shown like its C source: byte values right-aligned in
+// fixed-width columns with C-like syntax colours, the given declaration line
+// as a header (the prefix), and a closing }; once the run completes. The
+// table is short (256 values), so this rebuilds from scratch each render
+// rather than using the incremental path.
+function renderCodeColumns() {
+  // Leaving DOOM later must force the incremental renderer to rebuild, so
+  // invalidate its caches and own the container outright here.
+  renderCache = [];
+  groupElements = [];
+  lastPaddedGroup = null;
+  lastRenderContextKey = '__code__';
+  userDigitsEl.replaceChildren();
+
+  const entries = state.entries;
+  let cell = null; // current number's <span class="doom-cell">
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    if (e.char === ' ') { cell = null; continue; } // separator → end of cell
+    if (!cell) {
+      cell = document.createElement('span');
+      cell.className = 'doom-cell';
+      userDigitsEl.appendChild(cell);
+    }
+    const span = document.createElement('span');
+    if (e.checked) {
+      let cls = 'digit ' + e.status;
+      if (e.skipped) cls += ' skipped';
+      if (e.corrected && e.status === 'correct') cls += ' corrected';
+      span.className = cls;
+    } else {
+      span.className = 'digit pending';
+    }
+    span.textContent = e.char;
+    cell.appendChild(span);
+  }
+
+  piDisplayEl.classList.remove('grouped', 'diff-mode');
+  // The }; line only appears once the array is closed (run complete).
+  piDisplayEl.classList.toggle('run-complete', state.sequenceComplete);
+  updateStatTiles(countStats(entries));
+  updateKeypadHint();
+  requestAnimationFrame(() => {
+    piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
+  });
   updateUI();
 }
 

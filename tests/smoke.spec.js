@@ -25,7 +25,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
     'pi', 'tau', 'pi-squared', 'zeta2', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
     'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
-    'less-than-3', 'emergency',
+    'less-than-3', 'emergency', 'doom',
   ]);
 });
 
@@ -77,6 +77,75 @@ test('emergency number: keypad shows faint phone letters (ABC/DEF…) for this m
     el => getComputedStyle(el, '::after').content
   );
   expect(after).toContain('DEF');
+});
+
+test('doom: comma and space are interchangeable separators', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // "0 8 109" → 0, sep, 8, sep, 1, 0, 9 = 7 correct entries.
+  await page.keyboard.type('0 8 109');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('7');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  // The same value typed with commas scores identically.
+  await page.locator('#reset-btn').click();
+  await page.keyboard.type('0,8,109');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('7');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('doom: extra/duplicate separators are not penalised', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // Mixed and doubled separators collapse to one — "0 8" = 3 correct entries.
+  await page.keyboard.type('0,,  8');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('doom: shows the C header, aligned cells, and a comma key (not space)', async ({ page }) => {
+  await setSequence(page, 'doom');
+  await expect(page.locator('#pi-display')).toHaveClass(/code-mode/);
+  // The given declaration line renders as syntax-coloured HTML.
+  await expect(page.locator('#prefix')).toContainText('rndtable[256]');
+  await expect(page.locator('#prefix .c-type')).toHaveText('unsigned char');
+  // Comma key shown, space key hidden.
+  await expect(page.locator('#keypad-decimal .key-comma')).toBeVisible();
+  await expect(page.locator('#keypad-decimal .key-space')).toBeHidden();
+  // Each value becomes one aligned column cell.
+  await page.keyboard.type('0 8 109');
+  await expect(page.locator('#user-digits .doom-cell')).toHaveCount(3);
+});
+
+test('doom: a separator after the final value closes the array (}; + lock)', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // How many chars (digits + separators) the table holds.
+  await page.locator('#settings-toggle').click();
+  const hint = await page.locator('#sequence-digits-hint').textContent();
+  await page.locator('#settings-close').click();
+  const total = parseInt(hint.replace(/[^0-9]/g, ''), 10);
+  // Skip everything but the final digit, type it, then close with a comma.
+  await page.locator('#stat-skipped-tile').click();
+  await page.locator('#skip-count').fill(String(total - 1));
+  await page.locator('#skip-confirm').click();
+  await page.keyboard.type('9'); // last value is 249 → final char "9"
+  // DOOM finishes on the separator, not the last digit — not done yet.
+  await expect(page.locator('#pi-display')).not.toHaveClass(/run-complete/);
+  await page.keyboard.press(',');
+  await expect(page.locator('#pi-display')).toHaveClass(/run-complete/);
+  // Reached the end via skip, so it's a (correct) "not a perfect run" finish.
+  await expect(page.locator('#keypad-hint')).toHaveText(/Complete|Finished/);
+  await expect(page.locator('#keypad-decimal .key[data-digit="1"]')).toBeDisabled();
+  await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
+});
+
+test('primes-spaced: commas are accepted and recorded as spaces', async ({ page }) => {
+  await setSequence(page, 'primes-spaced');
+  // "2," → the leading "2 " is absorbed; "3,5,7" → 3 5 7 = 5 entries.
+  await page.keyboard.type('2,3,5,7');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('5');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('pi: typing the first digits scores correct', async ({ page }) => {
