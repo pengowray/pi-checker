@@ -142,15 +142,31 @@ test('doom: comma and space are interchangeable, extra separators do not penalis
   await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
-test('doom: a diverging value turns entirely red and scores incorrect immediately', async ({ page }) => {
+test('doom: a malformed value (08) goes entirely red and scores incorrect at once', async ({ page }) => {
   await setSequence(page, 'doom');
-  // byte 0 = 0; "08" can't be 0, so both digits go red and it scores wrong now.
+  // byte 0 = 0; "08" is malformed octal — it can never be valid, so both digits
+  // go red and it scores wrong immediately.
   await page.keyboard.type('08');
   await expect(page.locator('#stat-wrong')).toHaveText('1');
   await expect(page.locator('#stat-correct')).toHaveText('—');
   const classes = await page.$$eval('#user-digits .digit', els => els.map(e => e.className));
   expect(classes.length).toBe(2);
   expect(classes.every(c => /\bwrong\b/.test(c))).toBe(true);
+});
+
+test('doom: a wrong but still-growable value keeps accepting digits, scored only when saturated', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // byte 2 = 109. "11" diverges (red) but could still grow (110–119), so it's
+  // not scored yet and the user may keep typing toward "111".
+  await page.keyboard.type('0 8 11');
+  await expect(page.locator('#stat-correct')).toHaveText('2');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  // "111" can't grow past 255 → now it's scored wrong.
+  await page.keyboard.type('1');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
+  // Keep going to "11111," — still a single wrong value.
+  await page.keyboard.type('11,');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
 });
 
 test('doom: shows the C header, aligned cells, and a comma key (not space)', async ({ page }) => {
