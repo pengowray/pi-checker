@@ -271,6 +271,16 @@ test('doom: a wrong value retyped correctly counts as fixed', async ({ page }) =
   await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
+test('doom: a skipped-over value is inserted as missed', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // byte 1 = 8 is skipped: type 0 then 109 (byte 2). 8 is inserted as missed.
+  await page.keyboard.type('0,109,');
+  await expect(page.locator('#stat-correct')).toHaveText('2');
+  await expect(page.locator('#stat-missed')).toHaveText('1');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  await expect(page.locator('#user-digits .missed-marker')).toHaveCount(1); // the "8"
+});
+
 test('doom: entering the whole table finishes the run (}; + lock), no trailing separator', async ({ page }) => {
   await setSequence(page, 'doom');
   // Paste the full decimal table; the final byte 249 completes it on its own

@@ -2050,20 +2050,34 @@ function computeByteStatuses(def) {
   function paint(st) { for (const e of tokenEntries) e.status = st; }
 
   // Resolve the current value (tokenEntries/token at byteIdx) into a bucket and
-  // its final colour. Used both when a separator commits a value and for a
-  // saturated/skipped trailing value.
+  // its final colour, and return the target byte it resolved against. Used when
+  // a separator commits a value and for a saturated/skipped trailing value.
   function resolveValue() {
-    if (tokenEntries.length === 0) return;
-    const reps = repsFor(byteIdx);
-    for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
-    const full = !!reps && (token === reps.dec || token === reps.oct);
+    if (tokenEntries.length === 0) return byteIdx;
     const allSkipped = tokenEntries.every(e => e.skipped);
+    let target = byteIdx;
+    let reps = repsFor(target);
+    let full = !!reps && (token === reps.dec || token === reps.oct);
+    // Missed: a typed value that doesn't match this byte but exactly matches
+    // the NEXT one — the user skipped a single value. Insert it as missed and
+    // score this value against the byte it actually matched.
+    if (!allSkipped && !full && byteIdx + 1 <= lastByte) {
+      const next = repsFor(byteIdx + 1);
+      if (next && (token === next.dec || token === next.oct)) {
+        missedValues++;
+        tokenEntries[0].missedValue = String(bytes[byteIdx]);
+        target = byteIdx + 1;
+        reps = next;
+        full = true;
+      }
+    }
+    for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
     let resolvedRight = false;
     if (allSkipped) {
       paint('correct'); skippedValues++; resolvedRight = true; // grey via .skipped
     } else if (full) {
       paint('correct');
-      if (wrongPos.has(byteIdx)) {
+      if (wrongPos.has(target)) {
         for (const te of tokenEntries) te.corrected = true;
         fixedValues++;
       } else {
@@ -2071,9 +2085,10 @@ function computeByteStatuses(def) {
       }
       resolvedRight = true;
     } else {
-      paint('wrong'); wrongValues++; wrongPos.add(byteIdx);
+      paint('wrong'); wrongValues++; wrongPos.add(target);
     }
-    if (resolvedRight && byteIdx === lastByte) state.doomFinalComplete = true;
+    if (resolvedRight && target === lastByte) state.doomFinalComplete = true;
+    return target;
   }
 
   for (let i = 0; i < entries.length; i++) {
@@ -2089,9 +2104,9 @@ function computeByteStatuses(def) {
     if (e.char === ' ') {
       // Separator commits the current value to its final colour and score.
       if (tokenEntries.length > 0) {
-        resolveValue();
+        const target = resolveValue();
         tokenEntries[tokenEntries.length - 1].valueEnd = true;
-        byteIdx++;
+        byteIdx = target + 1; // skip past a missed byte if one was inserted
         token = '';
         tokenEntries = [];
       }
@@ -2113,12 +2128,13 @@ function computeByteStatuses(def) {
   // change) or was filled by Skip; a still-growable value stays unscored.
   if (tokenEntries.length > 0 &&
       (saturated(token) || tokenEntries.every(e => e.skipped))) {
-    resolveValue();
+    byteIdx = resolveValue(); // a missed insert shifts the value's own index
   }
   state.doomScore = {
     correct: correctValues, wrong: wrongValues,
     fixed: fixedValues, skipped: skippedValues, missed: missedValues,
   };
+  // The keypad hint counts values (bytes): the value currently being entered.
   state.nextSeqIdx = byteIdx;
 }
 
@@ -2630,6 +2646,23 @@ function renderCodeColumns() {
     // typed separator still get their own cell + comma.
     if (e.char === ' ') continue;
     if (!cell) {
+      // A value the user skipped over (missed) is inserted before this one as a
+      // muted marker cell + comma.
+      if (e.missedValue) {
+        const m = document.createElement('span');
+        m.className = 'doom-cell';
+        for (const ch of e.missedValue) {
+          const d = document.createElement('span');
+          d.className = 'digit missed-marker';
+          d.textContent = ch;
+          m.appendChild(d);
+        }
+        userDigitsEl.appendChild(m);
+        const mc = document.createElement('span');
+        mc.className = 'doom-comma';
+        mc.textContent = ',';
+        userDigitsEl.appendChild(mc);
+      }
       cell = document.createElement('span');
       cell.className = 'doom-cell';
       userDigitsEl.appendChild(cell);
