@@ -230,11 +230,11 @@ const SEQUENCES = {
   // 0 is part of what the user has to recall. Spaces auto-insert at the
   // phone-number group boundaries via spaceBoundaries (the same mechanism
   // primes uses); phoneLetters paints the faint ABC/DEF keypad letters.
-  emergency: {
+  moss: {
     label: 'New emergency services number',
     shortLabel: 'emergency number',
     hintLabel: 'the new emergency services number',
-    titleHtml: 'Emergency Checker',
+    titleHtml: 'The Moss Memory Check',
     integerPart: '',
     prefix: '',
     alphabet: '0123456789',
