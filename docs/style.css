@@ -664,6 +664,14 @@ input[type="range"]:disabled {
   letter-spacing: normal;
 }
 
+/* Each value + its comma form one atomic column. As an inline-block it never
+   splits across a line break, so a comma can never start the next row — wrapping
+   only ever happens between columns. The right margin is the inter-column gap. */
+.pi-display.code-mode .doom-col {
+  display: inline-block;
+  margin-right: 1ch;
+}
+
 /* Each byte value is a right-aligned fixed-width cell; equal widths make the
    wrapped rows line up into columns. 3ch fits 0–255 (max 3 digits / "0377"
    octal also stays in step via its own cell). */
@@ -674,11 +682,10 @@ input[type="range"]:disabled {
 }
 
 /* Faint comma after each value so the listing reads as valid C. It hugs the
-   number; its right margin is the inter-column gap. */
+   number, inside the column so it never wraps to the next line. */
 .pi-display.code-mode .doom-comma {
   color: var(--code-punct);
   opacity: 0.5;
-  margin-right: 1ch;
 }
 
 /* Correct values read as numeric literals; wrong/pending keep their feedback

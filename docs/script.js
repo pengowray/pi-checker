@@ -2639,6 +2639,7 @@ function renderCodeColumns() {
 
   const entries = state.entries;
   let cell = null; // current value's <span class="doom-cell">
+  let col = null;  // current value's <span class="doom-col"> (cell + comma)
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     // Separators are absorbed — value boundaries come from valueEnd (set by
@@ -2647,8 +2648,12 @@ function renderCodeColumns() {
     if (e.char === ' ') continue;
     if (!cell) {
       // A value the user skipped over (missed) is inserted before this one as a
-      // muted marker cell + comma.
+      // muted marker cell + comma. Each value is wrapped in a .doom-col so the
+      // value and its comma stay together as one atomic column — line wrapping
+      // happens between columns, never before a comma.
       if (e.missedValue) {
+        const mcol = document.createElement('span');
+        mcol.className = 'doom-col';
         const m = document.createElement('span');
         m.className = 'doom-cell';
         for (const ch of e.missedValue) {
@@ -2657,15 +2662,19 @@ function renderCodeColumns() {
           d.textContent = ch;
           m.appendChild(d);
         }
-        userDigitsEl.appendChild(m);
+        mcol.appendChild(m);
         const mc = document.createElement('span');
         mc.className = 'doom-comma';
         mc.textContent = ',';
-        userDigitsEl.appendChild(mc);
+        mcol.appendChild(mc);
+        userDigitsEl.appendChild(mcol);
       }
+      col = document.createElement('span');
+      col.className = 'doom-col';
       cell = document.createElement('span');
       cell.className = 'doom-cell';
-      userDigitsEl.appendChild(cell);
+      col.appendChild(cell);
+      userDigitsEl.appendChild(col);
     }
     // Colour is shown immediately (no pending grey while typing): green while
     // a valid prefix / exact match, red on divergence. Skipped values render
@@ -2678,12 +2687,14 @@ function renderCodeColumns() {
     span.textContent = e.char;
     cell.appendChild(span);
     if (e.valueEnd) {
-      // Resolved value → a faint comma after it (valid C), and start a new cell.
+      // Resolved value → a faint comma after it (valid C), inside the same
+      // column so it can never wrap to the start of the next line.
       const comma = document.createElement('span');
       comma.className = 'doom-comma';
       comma.textContent = ',';
-      userDigitsEl.appendChild(comma);
+      col.appendChild(comma);
       cell = null;
+      col = null;
     }
   }
 
