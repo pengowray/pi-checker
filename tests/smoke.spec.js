@@ -169,6 +169,28 @@ test('doom: a wrong but still-growable value keeps accepting digits, scored only
   await expect(page.locator('#stat-wrong')).toHaveText('1');
 });
 
+test('doom: a correct value stays editable — extending it takes the point back', async ({ page }) => {
+  await setSequence(page, 'doom');
+  await page.keyboard.type('0,8,109,220'); // byte 3 = 220 → 4 correct
+  await expect(page.locator('#stat-correct')).toHaveText('4');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  // "2200" is no longer 220 → the point is taken back and it goes wrong.
+  await page.keyboard.type('0');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
+});
+
+test('doom: an undecided value shows in the neutral pending grey, not green', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // "10" is a valid prefix of 109 but not yet decided → grey, unscored.
+  await page.keyboard.type('0,8,10');
+  const classes = await page.$$eval('#user-digits .doom-cell:last-child .digit',
+    els => els.map(e => e.className));
+  expect(classes.length).toBe(2);
+  expect(classes.every(c => /\bpending\b/.test(c))).toBe(true);
+  await expect(page.locator('#stat-correct')).toHaveText('2'); // only 0 and 8 so far
+});
+
 test('doom: shows the C header, aligned cells, and a comma key (not space)', async ({ page }) => {
   await setSequence(page, 'doom');
   await expect(page.locator('#pi-display')).toHaveClass(/code-mode/);

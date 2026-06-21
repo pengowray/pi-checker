@@ -1920,24 +1920,22 @@ function markAllChecked() {
 // octal digits, e.g. "0371").
 //
 // A value is "saturated" once no digit could extend it to another valid byte
-// ≤ 255 (decimal ×10 > 255, octal ×8 > 255, or malformed like a 8/9 after a
-// leading 0). Resolution:
-//   • Correct + saturated → scores correct and auto-advances, so no separator
-//     is needed after it (e.g. "109", "249").
-//   • Saturated but not matching → scores incorrect (e.g. "111" for 109, or the
-//     malformed "08"); it does NOT auto-advance — the user can keep typing
-//     ("11111") and it stays one wrong value until a separator.
-//   • Still growable (≤25 decimal, like "0" or "8", or a non-saturated wrong
-//     value like "11") stays UNSCORED until a separator — so its correctness
-//     can't leak as a clue, and a wrong-but-growable value still accepts more
-//     digits ("11" → "111").
-// Display: a value's digits are green while still a valid prefix of a form, and
-// the whole value turns red the moment it diverges.
-//
-// valueEnd marks the last digit of a value that's resolved AND boundary-closed
-// (correct-auto-advance, or committed by a separator) so the renderer can draw
-// value cells and the faint commas between them; the final byte gets no
-// valueEnd (the "};" line closes it instead).
+// ≤ 255 (decimal ×10 > 255, octal ×8 > 255, or malformed like an 8/9 after a
+// leading 0). Values do NOT auto-advance — typing keeps editing the current
+// value until a separator, so even a correct value can be ruined ("220" → a
+// wrong "2200"). Each render the trailing value is re-judged live:
+//   • Matches a form AND saturated → scores correct (green). The final byte
+//     also finishes the run here (no trailing separator needed).
+//   • Saturated but not matching → scores incorrect (red) — e.g. "111" for 109,
+//     "2200", or the malformed "08". The user may keep typing; it stays one
+//     wrong value until a separator.
+//   • Still growable and a valid prefix ("0", "8", "10") → shown in the neutral
+//     pending grey and NOT scored, so its correctness can't leak as a clue.
+//   • Growable but already diverged ("11") → red, but still unscored until it
+//     saturates ("111") or a separator commits it.
+// A separator commits the current value to its final colour/score (green if it
+// matches, red otherwise) and sets valueEnd so the renderer draws the cell and
+// the faint comma after it.
 function computeByteStatuses(def) {
   const bytes = def.bytes;
   const entries = state.entries;
@@ -1945,7 +1943,6 @@ function computeByteStatuses(def) {
   let byteIdx = 0;       // which target byte the current value maps to
   let token = '';        // chars accumulated for the current value
   let tokenEntries = [];
-  let closed = false;    // current value resolved correct → auto-advanced
   let correctValues = 0, wrongValues = 0;
   state.doomFinalComplete = false;
 
@@ -1954,9 +1951,6 @@ function computeByteStatuses(def) {
     const V = bytes[idx];
     return { V, dec: String(V), oct: '0' + V.toString(8) };
   }
-  // Can this token still grow into a valid byte (≤255)? If not it's saturated
-  // and ready to be judged. A leading-0 token with an 8/9 is malformed octal —
-  // never valid → saturated.
   function saturated(tok) {
     if (tok.length > 1 && tok[0] === '0') {
       if (/[89]/.test(tok)) return true;
@@ -1976,18 +1970,8 @@ function computeByteStatuses(def) {
     e.seqIdxAfter = i + 1;
     e.valueEnd = false;
 
-    // A correct-and-saturated value auto-advanced at the previous entry; this
-    // one starts the next value (or is an absorbed redundant separator).
-    if (closed) {
-      byteIdx++;
-      token = '';
-      tokenEntries = [];
-      closed = false;
-    }
-
     if (e.char === ' ') {
-      // Separator commits the current value; absorbed if nothing is pending
-      // (the previous value already auto-advanced).
+      // Separator commits the current value to its final colour and score.
       if (tokenEntries.length > 0) {
         const reps = repsFor(byteIdx);
         const full = !!reps && (token === reps.dec || token === reps.oct);
@@ -2008,33 +1992,29 @@ function computeByteStatuses(def) {
       for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
       const isPrefix = !!reps && (reps.dec.startsWith(token) || reps.oct.startsWith(token));
       const isFull = !!reps && (token === reps.dec || token === reps.oct);
-      if (isFull && saturated(token)) {
-        // Correct and can't grow → score correct and auto-advance.
-        paint('correct');
+      if (isFull && saturated(token)) paint('correct'); // confirmed correct → green
+      else if (isPrefix) paint('pending');              // could still be correct → grey
+      else paint('wrong');                              // diverged → red
+    }
+  }
+  // Live-score the trailing (uncommitted) value once it's saturated — at that
+  // point it can't change, so it counts (correct if it matches a form, else
+  // wrong). A still-growable value stays unscored.
+  if (tokenEntries.length > 0) {
+    const reps = repsFor(byteIdx);
+    const full = !!reps && (token === reps.dec || token === reps.oct);
+    if (saturated(token)) {
+      if (full) {
         correctValues++;
-        closed = true;
         if (byteIdx === lastByte) state.doomFinalComplete = true;
-        else e.valueEnd = true; // final byte gets "};" instead of a comma
       } else {
-        // Green while still a valid prefix; whole value red once it diverges.
-        paint(isPrefix ? 'correct' : 'wrong');
-        // Not scored here — a separator (below) or saturation (after the loop)
-        // judges it, so a growable value like "11" can still reach "111".
+        wrongValues++;
       }
     }
   }
-  // Trailing (uncommitted) value: score it incorrect only once it's saturated
-  // and not a match ("111", "08", "11111"). A still-growable value ("8", "11")
-  // stays unscored; a correct-and-saturated trailing value already
-  // auto-advanced (closed) and was counted above.
-  if (tokenEntries.length > 0 && !closed) {
-    const reps = repsFor(byteIdx);
-    const full = !!reps && (token === reps.dec || token === reps.oct);
-    if (!full && saturated(token)) wrongValues++;
-  }
   state.doomScore = { correct: correctValues, wrong: wrongValues };
-  // The keypad hint counts values (bytes): how many are done so far.
-  state.nextSeqIdx = byteIdx + (closed ? 1 : 0);
+  // The keypad hint counts values (bytes): the value currently being entered.
+  state.nextSeqIdx = byteIdx;
 }
 
 // ---- Status computation ----
