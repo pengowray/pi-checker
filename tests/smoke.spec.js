@@ -112,27 +112,39 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
 });
 
+test('doom: scores by value, and only once a value is committed (moved on)', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // Type the first value (0) but don't move on yet — it's complete but must
+  // not be scored, or its correctness would leak as a clue.
+  await page.keyboard.type('0');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  // Move on with a separator → the value is now committed and counts.
+  await page.keyboard.type(' ');
+  await expect(page.locator('#stat-correct')).toHaveText('1');
+});
+
 test('doom: comma and space are interchangeable separators', async ({ page }) => {
   await setSequence(page, 'doom');
-  // "0 8 109" → 0, sep, 8, sep, 1, 0, 9 = 7 correct entries.
-  await page.keyboard.type('0 8 109');
+  // Three values committed (each followed by a separator) → 3 correct values.
+  await page.keyboard.type('0 8 109 '); // values 0, 8, 109
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('7');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
-  // The same value typed with commas scores identically.
+  // The same values committed with commas score identically.
   await page.locator('#reset-btn').click();
-  await page.keyboard.type('0,8,109');
+  await page.keyboard.type('0,8,109,');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('7');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('doom: extra/duplicate separators are not penalised', async ({ page }) => {
   await setSequence(page, 'doom');
-  // Mixed and doubled separators collapse to one — "0 8" = 3 correct entries.
-  await page.keyboard.type('0,,  8');
+  // Mixed and doubled separators collapse to one — two values committed.
+  await page.keyboard.type('0,,  8,');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await expect(page.locator('#stat-correct')).toHaveText('2');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
@@ -152,15 +164,16 @@ test('doom: shows the C header, aligned cells, and a comma key (not space)', asy
 
 test('doom: a byte may be entered in octal (leading 0 + octal conversion)', async ({ page }) => {
   await setSequence(page, 'doom');
-  // Byte 0 = 0, byte 1 = 8. Enter byte 1 as octal "010" (= 8) → all green.
-  await page.keyboard.type('0 010');
+  // Byte 0 = 0, byte 1 = 8. Enter byte 1 as octal "010" (= 8); commit both.
+  await page.keyboard.type('0 010 ');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('5');
+  await expect(page.locator('#stat-correct')).toHaveText('2');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
-  // A wrong octal value is flagged: "011" is octal 9, not 8.
+  // A wrong octal value is flagged once committed: "011" is octal 9, not 8.
   await page.locator('#reset-btn').click();
-  await page.keyboard.type('0 011');
+  await page.keyboard.type('0 011 ');
   await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('1');
   await expect(page.locator('#stat-wrong')).toHaveText('1');
 });
 
@@ -181,6 +194,9 @@ test('doom: entering the whole table finishes the run (}; + lock), no trailing s
   }, DOOM_RND.join(' '));
   await expect(page.locator('#pi-display')).toHaveClass(/run-complete/);
   await expect(page.locator('#keypad-decimal .key[data-digit="1"]')).toBeDisabled();
+  // All 256 values scored correct.
+  await expect(page.locator('#stat-correct')).toHaveText('256');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 
 test('primes-spaced: commas are accepted and recorded as spaces', async ({ page }) => {

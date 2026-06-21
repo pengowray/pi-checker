@@ -1088,6 +1088,8 @@ function clearSession() {
   state.practicePauseDisplayedAt = 0;
   state.sequenceComplete = false;
   state.completeFrozenAt = 0;
+  state.doomScore = { correct: 0, wrong: 0 };
+  state.doomFinalComplete = false;
   state.erasedErrors = 0;
   state.erasedPreCheck = 0;
   state.correctedPositions.clear();
@@ -1915,16 +1917,25 @@ function markAllChecked() {
 // Entries are split into byte tokens on separators (space, with commas already
 // canonicalised to spaces). Token k is scored against byte value k, accepting
 // EITHER the decimal form ("249") OR the C octal form (a leading 0 then the
-// octal digits, e.g. "0371"). Each character is green while the token so far
-// is a valid prefix of one of those forms, red once it diverges. The run is
-// complete the instant the final byte's token exactly equals one of its forms
-// — for 249 that's its last digit, so no trailing separator is needed.
+// octal digits, e.g. "0371").
+//
+// Scoring is by VALUE, and only once a value is *committed* — i.e. the user
+// typed a separator after it (moved on) or it's the final value that finishes
+// the run. A committed value counts correct if it exactly matches a form, else
+// incorrect. The trailing (in-progress) value is never scored, so a complete-
+// but-not-yet-left value like "11" isn't counted correct before the user can
+// extend it to "111" — which would leak a clue through the score.
+//
+// Display is independent of scoring: while a value is being typed its digits
+// are green as long as they're still a valid prefix of a form, red once they
+// diverge. Once committed, the whole value is green (exact match) or red.
 function computeByteStatuses(def) {
   const bytes = def.bytes;
   const entries = state.entries;
   let byteIdx = 0;      // which target byte the current token maps to
   let tokenStr = '';    // chars accumulated for the current token
   let tokenEntries = [];
+  let correctValues = 0, wrongValues = 0;
   state.doomFinalComplete = false;
 
   function repsFor(idx) {
@@ -1933,23 +1944,35 @@ function computeByteStatuses(def) {
     return { dec: String(V), oct: '0' + V.toString(8) };
   }
 
-  function scoreToken() {
+  // committed = a separator follows (or the run finished), so the value's
+  // correctness is final and counts toward the score.
+  function scoreToken(committed) {
+    if (tokenEntries.length === 0) return;
     const reps = repsFor(byteIdx);
-    if (!reps) {
-      for (const e of tokenEntries) { e.status = 'wrong'; e.expected = null; }
-      return;
-    }
-    let valid = true;
-    for (let i = 0; i < tokenEntries.length; i++) {
-      const pre = tokenStr.slice(0, i + 1);
-      const ok = valid && (reps.dec.startsWith(pre) || reps.oct.startsWith(pre));
-      tokenEntries[i].status = ok ? 'correct' : 'wrong';
-      tokenEntries[i].expected = reps.dec;
-      if (!ok) valid = false;
-    }
-    if (byteIdx === bytes.length - 1 &&
-        (tokenStr === reps.dec || tokenStr === reps.oct)) {
-      state.doomFinalComplete = true;
+    const full = !!reps && (tokenStr === reps.dec || tokenStr === reps.oct);
+    if (committed) {
+      // Resolved value: all green (exact) or all red (incomplete / wrong).
+      for (const e of tokenEntries) {
+        e.status = full ? 'correct' : 'wrong';
+        e.expected = reps ? reps.dec : null;
+      }
+      if (full) correctValues++; else wrongValues++;
+    } else {
+      // In-progress value: colour each char by prefix validity, don't score.
+      let valid = true;
+      for (let i = 0; i < tokenEntries.length; i++) {
+        const pre = tokenStr.slice(0, i + 1);
+        const ok = valid && reps && (reps.dec.startsWith(pre) || reps.oct.startsWith(pre));
+        tokenEntries[i].status = ok ? 'correct' : 'wrong';
+        tokenEntries[i].expected = reps ? reps.dec : null;
+        if (!ok) valid = false;
+      }
+      // The final value finishes (and so commits) the run the instant it's
+      // fully entered — no trailing separator needed.
+      if (full && byteIdx === bytes.length - 1) {
+        state.doomFinalComplete = true;
+        correctValues++;
+      }
     }
   }
 
@@ -1962,7 +1985,7 @@ function computeByteStatuses(def) {
     e.correctNoSkip = false;
     e.seqIdxAfter = i + 1;
     if (e.char === ' ') {
-      scoreToken();
+      scoreToken(true); // separator commits the value
       e.status = tokenEntries.length > 0 ? 'correct' : 'wrong';
       e.expected = null;
       byteIdx++;
@@ -1973,7 +1996,8 @@ function computeByteStatuses(def) {
       tokenEntries.push(e);
     }
   }
-  scoreToken(); // the trailing (in-progress) token
+  scoreToken(false); // the trailing (in-progress) value
+  state.doomScore = { correct: correctValues, wrong: wrongValues };
   // The keypad hint counts values (bytes), not characters.
   state.nextSeqIdx = byteIdx;
 }
@@ -2498,15 +2522,10 @@ function renderCodeColumns() {
       cell.className = 'doom-cell';
       userDigitsEl.appendChild(cell);
     }
+    // Colour is shown immediately (no pending grey): green while the value is
+    // a valid prefix / exact match, red once it diverges or is committed wrong.
     const span = document.createElement('span');
-    if (e.checked) {
-      let cls = 'digit ' + e.status;
-      if (e.skipped) cls += ' skipped';
-      if (e.corrected && e.status === 'correct') cls += ' corrected';
-      span.className = cls;
-    } else {
-      span.className = 'digit pending';
-    }
+    span.className = 'digit ' + (e.status || 'pending');
     span.textContent = e.char;
     cell.appendChild(span);
   }
@@ -2514,7 +2533,9 @@ function renderCodeColumns() {
   piDisplayEl.classList.remove('grouped', 'diff-mode');
   // The }; line only appears once the array is closed (run complete).
   piDisplayEl.classList.toggle('run-complete', state.sequenceComplete);
-  updateStatTiles(countStats(entries));
+  // Score by value: correct / incorrect committed bytes (computeByteStatuses).
+  const score = state.doomScore || { correct: 0, wrong: 0 };
+  updateStatTiles({ correct: score.correct, wrong: score.wrong, missed: 0, skipped: 0, fixed: 0 });
   updateKeypadHint();
   requestAnimationFrame(() => {
     piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
