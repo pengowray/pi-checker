@@ -48,7 +48,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
     'pi', 'tau', 'pi-squared', 'zeta2', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
     'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
-    'less-than-3', 'emergency', 'doom',
+    'less-than-3', 'moss', 'doom',
   ]);
 });
 
@@ -67,7 +67,7 @@ test('less-than-3: any digits are accepted as correct', async ({ page }) => {
 });
 
 test('emergency number: no prefix clue, auto-spaces, and the final digit auto-checks', async ({ page }) => {
-  await setSequence(page, 'emergency');
+  await setSequence(page, 'moss');
   // No "0." clue — the leading 0 is part of what the user has to recall.
   await expect(page.locator('#prefix')).toBeHidden();
   // Type the whole number; entering the final digit correctly auto-checks
@@ -80,7 +80,7 @@ test('emergency number: no prefix clue, auto-spaces, and the final digit auto-ch
 });
 
 test('emergency number: finishing stops the clock and locks input', async ({ page }) => {
-  await setSequence(page, 'emergency');
+  await setSequence(page, 'moss');
   await page.keyboard.type('01189998819991197253');
   // Clock frozen, keypad disabled, and a clear "done" message.
   await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
@@ -91,7 +91,7 @@ test('emergency number: finishing stops the clock and locks input', async ({ pag
 test('emergency number: keypad shows faint phone letters (ABC/DEF…) for this mode only', async ({ page }) => {
   // Default sequence (pi): no phone letters.
   await expect(page.locator('#keypad-decimal')).not.toHaveClass(/phone-letters/);
-  await setSequence(page, 'emergency');
+  await setSequence(page, 'moss');
   await expect(page.locator('#keypad-decimal')).toHaveClass(/phone-letters/);
   await expect(page.locator('#keypad-decimal .key[data-digit="2"]')).toHaveAttribute('data-letters', 'ABC');
   await expect(page.locator('#keypad-decimal .key[data-digit="7"]')).toHaveAttribute('data-letters', 'PQRS');
@@ -103,7 +103,7 @@ test('emergency number: keypad shows faint phone letters (ABC/DEF…) for this m
 });
 
 test('emergency number: a final "3" after a slip still ends the run', async ({ page }) => {
-  await setSequence(page, 'emergency');
+  await setSequence(page, 'moss');
   await page.keyboard.type('0118999881999119725'); // first 19 digits
   await page.keyboard.type('5'); // wrong 20th (should be 3) — does not finish
   await expect(page.locator('#stat-time')).not.toHaveClass(/frozen/);
