@@ -1914,67 +1914,48 @@ function markAllChecked() {
 
 // ---- Byte-level status computation (DOOM) ----
 //
-// Entries are split into byte tokens on separators (space, with commas already
-// canonicalised to spaces). Token k is scored against byte value k, accepting
+// Entries are split into byte values on separators (space, with commas already
+// canonicalised to spaces). Value k is scored against byte value k, accepting
 // EITHER the decimal form ("249") OR the C octal form (a leading 0 then the
 // octal digits, e.g. "0371").
 //
-// Scoring is by VALUE, and only once a value is *committed* — i.e. the user
-// typed a separator after it (moved on) or it's the final value that finishes
-// the run. A committed value counts correct if it exactly matches a form, else
-// incorrect. The trailing (in-progress) value is never scored, so a complete-
-// but-not-yet-left value like "11" isn't counted correct before the user can
-// extend it to "111" — which would leak a clue through the score.
+// Scoring is by VALUE and resolves the instant a value is *determined*:
+//   • known correct: it exactly matches a form AND can't grow into another
+//     valid (≤255) byte — decimal once value ≥ 26 (×10 > 255), octal once
+//     value ≥ 32 (×8 > 255). Such a value scores immediately and auto-advances,
+//     so no separator is needed after it (e.g. "109", "249").
+//   • known incorrect: the whole value diverges from both forms — every digit
+//     turns red and it scores incorrect immediately (e.g. "08").
+// A value that's still a valid prefix but could grow (≤25 decimal, like "8")
+// stays green and unscored until the user moves on with a separator — so its
+// correctness can't leak as a clue before they might extend it ("11" → "111").
 //
-// Display is independent of scoring: while a value is being typed its digits
-// are green as long as they're still a valid prefix of a form, red once they
-// diverge. Once committed, the whole value is green (exact match) or red.
+// valueEnd marks the last digit of every resolved value so the renderer can
+// draw value cells and the faint commas between them; the final byte gets no
+// valueEnd (the "};" line closes it instead).
 function computeByteStatuses(def) {
   const bytes = def.bytes;
   const entries = state.entries;
-  let byteIdx = 0;      // which target byte the current token maps to
-  let tokenStr = '';    // chars accumulated for the current token
+  const lastByte = bytes.length - 1;
+  let byteIdx = 0;       // which target byte the current value maps to
+  let token = '';        // chars accumulated for the current value
   let tokenEntries = [];
+  let closed = false;    // current value already resolved (auto-advanced)
   let correctValues = 0, wrongValues = 0;
   state.doomFinalComplete = false;
 
   function repsFor(idx) {
     if (idx >= bytes.length) return null;
     const V = bytes[idx];
-    return { dec: String(V), oct: '0' + V.toString(8) };
+    return { V, dec: String(V), oct: '0' + V.toString(8) };
   }
-
-  // committed = a separator follows (or the run finished), so the value's
-  // correctness is final and counts toward the score.
-  function scoreToken(committed) {
-    if (tokenEntries.length === 0) return;
-    const reps = repsFor(byteIdx);
-    const full = !!reps && (tokenStr === reps.dec || tokenStr === reps.oct);
-    if (committed) {
-      // Resolved value: all green (exact) or all red (incomplete / wrong).
-      for (const e of tokenEntries) {
-        e.status = full ? 'correct' : 'wrong';
-        e.expected = reps ? reps.dec : null;
-      }
-      if (full) correctValues++; else wrongValues++;
-    } else {
-      // In-progress value: colour each char by prefix validity, don't score.
-      let valid = true;
-      for (let i = 0; i < tokenEntries.length; i++) {
-        const pre = tokenStr.slice(0, i + 1);
-        const ok = valid && reps && (reps.dec.startsWith(pre) || reps.oct.startsWith(pre));
-        tokenEntries[i].status = ok ? 'correct' : 'wrong';
-        tokenEntries[i].expected = reps ? reps.dec : null;
-        if (!ok) valid = false;
-      }
-      // The final value finishes (and so commits) the run the instant it's
-      // fully entered — no trailing separator needed.
-      if (full && byteIdx === bytes.length - 1) {
-        state.doomFinalComplete = true;
-        correctValues++;
-      }
-    }
+  // A fully-matched value is "determined" when no digit can extend it to
+  // another valid byte ≤ 255: decimal once ×10 > 255, octal once ×8 > 255.
+  function isDetermined(tok, reps) {
+    const octal = tok.length > 1 && tok[0] === '0';
+    return octal ? reps.V * 8 > 255 : reps.V * 10 > 255;
   }
+  function paint(st) { for (const e of tokenEntries) e.status = st; }
 
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
@@ -1984,22 +1965,59 @@ function computeByteStatuses(def) {
     e.corrected = false;
     e.correctNoSkip = false;
     e.seqIdxAfter = i + 1;
-    if (e.char === ' ') {
-      scoreToken(true); // separator commits the value
-      e.status = tokenEntries.length > 0 ? 'correct' : 'wrong';
-      e.expected = null;
+    e.valueEnd = false;
+
+    // A resolved value ended at the previous entry; this one starts the next
+    // value (or is an absorbed redundant separator).
+    if (closed) {
       byteIdx++;
-      tokenStr = '';
+      token = '';
       tokenEntries = [];
+      closed = false;
+    }
+
+    if (e.char === ' ') {
+      // Separator commits an in-progress value; absorbed if there's nothing
+      // pending (the previous value already auto-advanced).
+      if (tokenEntries.length > 0) {
+        const reps = repsFor(byteIdx);
+        const full = !!reps && (token === reps.dec || token === reps.oct);
+        paint(full ? 'correct' : 'wrong');
+        for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
+        tokenEntries[tokenEntries.length - 1].valueEnd = true;
+        if (full) correctValues++; else wrongValues++;
+        byteIdx++;
+        token = '';
+        tokenEntries = [];
+      }
+      e.status = 'correct';
+      e.expected = null;
     } else {
-      tokenStr += e.char;
+      token += e.char;
       tokenEntries.push(e);
+      const reps = repsFor(byteIdx);
+      for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
+      const isPrefix = !!reps && (reps.dec.startsWith(token) || reps.oct.startsWith(token));
+      const isFull = !!reps && (token === reps.dec || token === reps.oct);
+      if (isFull && isDetermined(token, reps)) {
+        paint('correct');
+        correctValues++;
+        closed = true;
+        if (byteIdx === lastByte) state.doomFinalComplete = true;
+        else e.valueEnd = true; // final byte gets "};" instead of a comma
+      } else if (!isPrefix) {
+        paint('wrong'); // whole value red the moment it diverges
+        wrongValues++;
+        closed = true;
+        e.valueEnd = true;
+      } else {
+        paint('correct'); // valid prefix so far — green, not yet scored
+      }
     }
   }
-  scoreToken(false); // the trailing (in-progress) value
   state.doomScore = { correct: correctValues, wrong: wrongValues };
-  // The keypad hint counts values (bytes), not characters.
-  state.nextSeqIdx = byteIdx;
+  // The keypad hint counts values (bytes): how many are done so far.
+  state.nextSeqIdx = byteIdx + (closed ? 1 : 0);
 }
 
 // ---- Status computation ----
@@ -2502,32 +2520,32 @@ function renderCodeColumns() {
   userDigitsEl.replaceChildren();
 
   const entries = state.entries;
-  let cell = null; // current number's <span class="doom-cell">
+  let cell = null; // current value's <span class="doom-cell">
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    if (e.char === ' ') {
-      // Separator → end of this value. Render a faint comma after it so the
-      // output reads as valid C ("0, 8, 109, …").
-      if (cell) {
-        const comma = document.createElement('span');
-        comma.className = 'doom-comma';
-        comma.textContent = ',';
-        userDigitsEl.appendChild(comma);
-      }
-      cell = null;
-      continue;
-    }
+    // Separators are absorbed — value boundaries come from valueEnd (set by
+    // computeByteStatuses), so determined values that auto-advanced without a
+    // typed separator still get their own cell + comma.
+    if (e.char === ' ') continue;
     if (!cell) {
       cell = document.createElement('span');
       cell.className = 'doom-cell';
       userDigitsEl.appendChild(cell);
     }
     // Colour is shown immediately (no pending grey): green while the value is
-    // a valid prefix / exact match, red once it diverges or is committed wrong.
+    // a valid prefix / exact match, red once it diverges or resolves wrong.
     const span = document.createElement('span');
     span.className = 'digit ' + (e.status || 'pending');
     span.textContent = e.char;
     cell.appendChild(span);
+    if (e.valueEnd) {
+      // Resolved value → a faint comma after it (valid C), and start a new cell.
+      const comma = document.createElement('span');
+      comma.className = 'doom-comma';
+      comma.textContent = ',';
+      userDigitsEl.appendChild(comma);
+      cell = null;
+    }
   }
 
   piDisplayEl.classList.remove('grouped', 'diff-mode');

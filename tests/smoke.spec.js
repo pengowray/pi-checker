@@ -112,40 +112,45 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
 });
 
-test('doom: scores by value, and only once a value is committed (moved on)', async ({ page }) => {
+test('doom: a determined value scores immediately; a still-growable one waits', async ({ page }) => {
   await setSequence(page, 'doom');
-  // Type the first value (0) but don't move on yet — it's complete but must
-  // not be scored, or its correctness would leak as a clue.
+  // byte 0 = 0: "0" could still become "00", so it isn't scored until you move on.
   await page.keyboard.type('0');
-  await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('—');
-  // Move on with a separator → the value is now committed and counts.
   await page.keyboard.type(' ');
   await expect(page.locator('#stat-correct')).toHaveText('1');
-});
-
-test('doom: comma and space are interchangeable separators', async ({ page }) => {
-  await setSequence(page, 'doom');
-  // Three values committed (each followed by a separator) → 3 correct values.
-  await page.keyboard.type('0 8 109 '); // values 0, 8, 109
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('3');
-  await expect(page.locator('#stat-wrong')).toHaveText('—');
-  // The same values committed with commas score identically.
-  await page.locator('#reset-btn').click();
-  await page.keyboard.type('0,8,109,');
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('3');
-  await expect(page.locator('#stat-wrong')).toHaveText('—');
-});
-
-test('doom: extra/duplicate separators are not penalised', async ({ page }) => {
-  await setSequence(page, 'doom');
-  // Mixed and doubled separators collapse to one — two values committed.
-  await page.keyboard.type('0,,  8,');
-  await page.keyboard.press('Enter');
+  // byte 1 = 8: "8" could still grow (80–89), so it also waits for the separator.
+  await page.keyboard.type('8');
+  await expect(page.locator('#stat-correct')).toHaveText('1');
+  await page.keyboard.type(' ');
   await expect(page.locator('#stat-correct')).toHaveText('2');
+  // byte 2 = 109: three digits can't grow past 255, so it scores the instant
+  // it's complete — before any separator.
+  await page.keyboard.type('109');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('doom: comma and space are interchangeable, extra separators do not penalise', async ({ page }) => {
+  await setSequence(page, 'doom');
+  await page.keyboard.type('0 8 109'); // space-separated → 3 values
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  // Mixed and doubled commas/spaces collapse to one → same 3.
+  await page.locator('#reset-btn').click();
+  await page.keyboard.type('0,,  8,109');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('doom: a diverging value turns entirely red and scores incorrect immediately', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // byte 0 = 0; "08" can't be 0, so both digits go red and it scores wrong now.
+  await page.keyboard.type('08');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  const classes = await page.$$eval('#user-digits .digit', els => els.map(e => e.className));
+  expect(classes.length).toBe(2);
+  expect(classes.every(c => /\bwrong\b/.test(c))).toBe(true);
 });
 
 test('doom: shows the C header, aligned cells, and a comma key (not space)', async ({ page }) => {
@@ -164,22 +169,24 @@ test('doom: shows the C header, aligned cells, and a comma key (not space)', asy
 
 test('doom: a byte may be entered in octal (leading 0 + octal conversion)', async ({ page }) => {
   await setSequence(page, 'doom');
-  // Byte 0 = 0, byte 1 = 8. Enter byte 1 as octal "010" (= 8); commit both.
+  // byte 1 = 8 entered as octal "010" (=8); octal 8 can still grow, so commit it.
   await page.keyboard.type('0 010 ');
-  await page.keyboard.press('Enter');
   await expect(page.locator('#stat-correct')).toHaveText('2');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
-  // A wrong octal value is flagged once committed: "011" is octal 9, not 8.
+  // byte 2 = 109 as octal "0155" is 3 octal digits (≥32) → determined, scores
+  // immediately; a wrong octal ("0156") goes red on divergence.
   await page.locator('#reset-btn').click();
-  await page.keyboard.type('0 011 ');
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('1');
+  await page.keyboard.type('0 8 0155');
+  await expect(page.locator('#stat-correct')).toHaveText('3');
+  await page.locator('#reset-btn').click();
+  await page.keyboard.type('0 8 0156');
+  await expect(page.locator('#stat-correct')).toHaveText('2');
   await expect(page.locator('#stat-wrong')).toHaveText('1');
 });
 
-test('doom: faint commas are rendered between values', async ({ page }) => {
+test('doom: faint commas are rendered between committed values', async ({ page }) => {
   await setSequence(page, 'doom');
-  await page.keyboard.type('0 8 109'); // three values → two separators
+  await page.keyboard.type('0 8 10'); // 0 and 8 committed; "10" still in progress
   await expect(page.locator('#user-digits .doom-comma')).toHaveCount(2);
 });
 
