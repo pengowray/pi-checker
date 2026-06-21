@@ -205,6 +205,25 @@ test('doom: shows the C header, aligned cells, and a comma key (not space)', asy
   await expect(page.locator('#user-digits .doom-cell')).toHaveCount(3);
 });
 
+test('doom: renames the modes and hides the inapplicable ones', async ({ page }) => {
+  await setSequence(page, 'doom');
+  await expect(page.locator('#mode-badge')).toHaveText(/Hey, not too rough/);
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('.mode-selector input[name="mode"][value="practice"] + span')).toHaveText('Hey, not too rough');
+  await expect(page.locator('.mode-selector input[name="mode"][value="hardcore"] + span')).toHaveText('Nightmare');
+  await expect(page.locator('.mode-selector .mode-option:has(input[name="mode"][value="sprint"])')).toBeHidden();
+  await expect(page.locator('.mode-selector .mode-option:has(input[name="mode"][value="bullet"])')).toBeHidden();
+  await expect(page.locator('#auto-delay-setting')).toBeHidden();
+  await expect(page.locator('#autocheck-style-setting')).toBeHidden();
+  await expect(page.locator('#bullet-settings')).toBeHidden();
+  await page.locator('#settings-close').click();
+  // Switching back restores the standard mode names.
+  await setSequence(page, 'pi');
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('.mode-selector input[name="mode"][value="practice"] + span')).toHaveText('Practice');
+  await expect(page.locator('.mode-selector .mode-option:has(input[name="mode"][value="sprint"])')).toBeVisible();
+});
+
 test('doom: a byte may be entered in octal (leading 0 + octal conversion)', async ({ page }) => {
   await setSequence(page, 'doom');
   // byte 1 = 8 entered as octal "010" (=8); octal 8 can still grow, so commit it.

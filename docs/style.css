@@ -695,6 +695,18 @@ input[type="range"]:disabled {
   margin-top: 0.1em;
 }
 
+/* DOOM (code sequence, applySequence sets .code-seq on <html>): only practice /
+   hardcore apply, so hide the other game modes and the auto-check options that
+   don't fit value-by-value scoring. */
+html.code-seq .mode-selector .mode-option:has(input[name="mode"][value="sprint"]),
+html.code-seq .mode-selector .mode-option:has(input[name="mode"][value="bullet"]),
+html.code-seq #auto-delay-setting,
+html.code-seq #autocheck-style-setting,
+html.code-seq #bullet-settings,
+html.code-seq #practice-lookahead-setting {
+  display: none;
+}
+
 .cursor {
   display: inline-block;
   color: var(--accent);

@@ -278,6 +278,10 @@ const SEQUENCES = {
     // fully entered — it's 3 digits, so no trailing separator is needed.
     codeColumns: true,
     commaKey: true,
+    // Only practice and hardcore apply (sprint/bullet timing and the auto-check
+    // options don't fit value scoring); shown with DOOM's skill-level names.
+    modes: ['practice', 'hardcore'],
+    modeLabels: { practice: 'Hey, not too rough', hardcore: 'Nightmare' },
   },
 };
 
@@ -828,6 +832,17 @@ function updateSequenceDigitsHint() {
   sequenceDigitsHintEl.textContent = `${def.digits.length.toLocaleString()} digits available`;
 }
 
+// Relabel the Mode chips for the current sequence (DOOM renames practice /
+// hardcore to its skill levels); others keep the defaults.
+const DEFAULT_MODE_LABELS = { practice: 'Practice', hardcore: 'Hardcore', sprint: 'Sprint', bullet: 'Bullet' };
+function applyModeLabels(def) {
+  const labels = (def && def.modeLabels) || {};
+  for (const mode of Object.keys(DEFAULT_MODE_LABELS)) {
+    const span = document.querySelector(`.mode-selector input[name="mode"][value="${mode}"] + span`);
+    if (span) span.textContent = labels[mode] || DEFAULT_MODE_LABELS[mode];
+  }
+}
+
 // ---- Sequence selection ----
 function applySequence(id) {
   const def = SEQUENCES[id];
@@ -859,6 +874,15 @@ function applySequence(id) {
   // run-complete flag (the }; line) — a fresh sequence is never pre-finished.
   piDisplayEl.classList.toggle('code-mode', !!def.codeColumns);
   piDisplayEl.classList.remove('run-complete');
+  // Some sequences (DOOM) offer only a subset of modes and rename them. Fall
+  // back to practice if the current mode isn't available, relabel the chips,
+  // and flag the root so CSS can hide the inapplicable settings.
+  if (def.modes && !def.modes.includes(state.mode)) {
+    state.mode = 'practice';
+    applyModeDefaults();
+  }
+  applyModeLabels(def);
+  document.documentElement.classList.toggle('code-seq', !!def.codeColumns);
   // Swap keypad layout
   keypadDecimal.hidden = def.keypadType !== 'decimal';
   keypadHex.hidden = def.keypadType !== 'hex';
@@ -1125,6 +1149,17 @@ function applyModeDefaults() {
 }
 
 function updateModeBadge() {
+  // Sequences with renamed modes (DOOM) show just the skill-level name — the
+  // auto-check/timing detail doesn't apply to value scoring.
+  const def = SEQUENCES[state.sequenceId];
+  if (def && def.modeLabels && def.modeLabels[state.mode]) {
+    let label = def.modeLabels[state.mode];
+    if (state.mode === 'hardcore' && state.hardcoreFailed) label += ' · failed';
+    else if (state.sequenceComplete) label += ' · complete';
+    modeBadge.textContent = label;
+    modeBadge.classList.remove('locked');
+    return;
+  }
   const modeName = state.mode.charAt(0).toUpperCase() + state.mode.slice(1);
   let delayText;
   if (state.mode === 'sprint' && state.sprintEnded) delayText = 'ended';
