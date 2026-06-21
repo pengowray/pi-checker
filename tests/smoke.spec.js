@@ -247,6 +247,30 @@ test('doom: faint commas are rendered between committed values', async ({ page }
   await expect(page.locator('#user-digits .doom-comma')).toHaveCount(2);
 });
 
+test('doom: Skip reveals values and counts them as skipped', async ({ page }) => {
+  await setSequence(page, 'doom');
+  await page.keyboard.press('v'); // skip value 0
+  await page.keyboard.press('v'); // skip value 1
+  await expect(page.locator('#stat-skipped')).toHaveText('2');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  // Revealed values render in the muted skipped style.
+  const cls = await page.locator('#user-digits .doom-cell .digit').first().getAttribute('class');
+  expect(cls).toMatch(/\bskipped\b/);
+});
+
+test('doom: a wrong value retyped correctly counts as fixed', async ({ page }) => {
+  await setSequence(page, 'doom');
+  // byte 0 = 0. Commit a wrong value, then erase and retype it correctly.
+  await page.keyboard.type('5,');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
+  await page.keyboard.press('Backspace'); // remove the separator
+  await page.keyboard.press('Backspace'); // remove "5"
+  await page.keyboard.type('0,');         // correct now → counts as fixed
+  await expect(page.locator('#stat-fixed')).toHaveText('1');
+  await expect(page.locator('#stat-correct')).toHaveText('—');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
 test('doom: entering the whole table finishes the run (}; + lock), no trailing separator', async ({ page }) => {
   await setSequence(page, 'doom');
   // Paste the full decimal table; the final byte 249 completes it on its own
@@ -258,8 +282,8 @@ test('doom: entering the whole table finishes the run (}; + lock), no trailing s
   }, DOOM_RND.join(' '));
   await expect(page.locator('#pi-display')).toHaveClass(/run-complete/);
   await expect(page.locator('#keypad-decimal .key[data-digit="1"]')).toBeDisabled();
-  // All 256 values scored correct.
-  await expect(page.locator('#stat-correct')).toHaveText('256');
+  // Pasted values count as skipped (not typed from memory) — all 256 of them.
+  await expect(page.locator('#stat-skipped')).toHaveText('256');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
 });
 

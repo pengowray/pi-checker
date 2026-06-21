@@ -788,15 +788,60 @@ function nextPiIdx() {
 
 function canSkip() {
   if (isInputLocked()) return false;
-  // Byte-level sequences (DOOM) accept decimal or octal, so "skip the next
-  // decimal char" is ill-defined — disable skipping for them.
-  if (SEQUENCES[state.sequenceId] && SEQUENCES[state.sequenceId].bytes) return false;
+  const def = SEQUENCES[state.sequenceId];
+  // Byte-level sequences (DOOM) skip whole values, not characters.
+  if (def && def.bytes) return (state.nextSeqIdx || 0) < def.bytes.length;
   if (nextPiIdx() >= state.digits.length) return false;
   if ((state.mode === 'sprint' || state.mode === 'hardcore') && state.startTime !== null) return false;
   return true;
 }
 
+// Reveal the next n byte values (DOOM): drop any partial value, then fill each
+// value's decimal form as skipped entries (plus a committing separator). They
+// score as "skipped" and read grey, like a revealed value elsewhere.
+function skipDoomValues(n) {
+  const def = SEQUENCES[state.sequenceId];
+  if (!def || !def.bytes || isInputLocked()) return 0;
+  // Drop the partial (uncommitted) trailing value so we fill clean values.
+  while (state.entries.length > 0 &&
+         state.entries[state.entries.length - 1].char !== ' ') {
+    state.entries.pop();
+  }
+  // We mutate entries directly here, so history can't replay cleanly.
+  state.undoStack.length = 0;
+  state.redoStack.length = 0;
+  computeStatuses(); // refresh nextSeqIdx
+  const fadeStartedAt = performance.now();
+  let count = 0;
+  for (let k = 0; k < (n | 0); k++) {
+    const idx = state.nextSeqIdx || 0;
+    if (idx >= def.bytes.length) break;
+    const dec = String(def.bytes[idx]);
+    const t = state.startTime === null ? null : (performance.now() - state.startTime);
+    for (const ch of dec) {
+      state.entries.push({
+        char: ch, t, fadeIn: 'fast', fadeStartedAt,
+        skipped: true, checked: true, status: 'pending', expected: null, missedBefore: [],
+      });
+    }
+    // Commit the value with a separator, except after the final byte.
+    if (idx < def.bytes.length - 1) {
+      state.entries.push({
+        char: ' ', t, skipped: true, checked: true,
+        status: 'pending', expected: null, missedBefore: [],
+      });
+    }
+    computeStatuses(); // advance nextSeqIdx for the next value
+    count++;
+  }
+  if (count > 0) maybeCompleteFinite();
+  render();
+  return count;
+}
+
 function skipDigits(n, fade = 'slow') {
+  const def = SEQUENCES[state.sequenceId];
+  if (def && def.bytes) return skipDoomValues(n);
   if (!canSkip()) return 0;
   const fadeStartedAt = performance.now();
   const remaining = state.digits.length - nextPiIdx();
@@ -1112,8 +1157,11 @@ function clearSession() {
   state.practicePauseDisplayedAt = 0;
   state.sequenceComplete = false;
   state.completeFrozenAt = 0;
-  state.doomScore = { correct: 0, wrong: 0 };
+  state.doomScore = { correct: 0, wrong: 0, fixed: 0, skipped: 0, missed: 0 };
   state.doomFinalComplete = false;
+  // Byte positions ever scored wrong this run — a later correct value there
+  // counts as "fixed".
+  state.doomWrongPositions = new Set();
   state.erasedErrors = 0;
   state.erasedPreCheck = 0;
   state.correctedPositions.clear();
@@ -1971,14 +2019,20 @@ function markAllChecked() {
 // A separator commits the current value to its final colour/score (green if it
 // matches, red otherwise) and sets valueEnd so the renderer draws the cell and
 // the faint comma after it.
+//
+// Scoring is per VALUE across five buckets: a value filled by Skip counts as
+// skipped (shown grey); a correct value at a position ever scored wrong counts
+// as fixed (green, dotted underline) rather than correct; otherwise correct or
+// wrong as above.
 function computeByteStatuses(def) {
   const bytes = def.bytes;
   const entries = state.entries;
   const lastByte = bytes.length - 1;
+  const wrongPos = state.doomWrongPositions || (state.doomWrongPositions = new Set());
   let byteIdx = 0;       // which target byte the current value maps to
   let token = '';        // chars accumulated for the current value
   let tokenEntries = [];
-  let correctValues = 0, wrongValues = 0;
+  let correctValues = 0, wrongValues = 0, fixedValues = 0, skippedValues = 0, missedValues = 0;
   state.doomFinalComplete = false;
 
   function repsFor(idx) {
@@ -1995,6 +2049,33 @@ function computeByteStatuses(def) {
   }
   function paint(st) { for (const e of tokenEntries) e.status = st; }
 
+  // Resolve the current value (tokenEntries/token at byteIdx) into a bucket and
+  // its final colour. Used both when a separator commits a value and for a
+  // saturated/skipped trailing value.
+  function resolveValue() {
+    if (tokenEntries.length === 0) return;
+    const reps = repsFor(byteIdx);
+    for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
+    const full = !!reps && (token === reps.dec || token === reps.oct);
+    const allSkipped = tokenEntries.every(e => e.skipped);
+    let resolvedRight = false;
+    if (allSkipped) {
+      paint('correct'); skippedValues++; resolvedRight = true; // grey via .skipped
+    } else if (full) {
+      paint('correct');
+      if (wrongPos.has(byteIdx)) {
+        for (const te of tokenEntries) te.corrected = true;
+        fixedValues++;
+      } else {
+        correctValues++;
+      }
+      resolvedRight = true;
+    } else {
+      paint('wrong'); wrongValues++; wrongPos.add(byteIdx);
+    }
+    if (resolvedRight && byteIdx === lastByte) state.doomFinalComplete = true;
+  }
+
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     // Fields the shared render/backspace bookkeeping may read.
@@ -2008,12 +2089,8 @@ function computeByteStatuses(def) {
     if (e.char === ' ') {
       // Separator commits the current value to its final colour and score.
       if (tokenEntries.length > 0) {
-        const reps = repsFor(byteIdx);
-        const full = !!reps && (token === reps.dec || token === reps.oct);
-        paint(full ? 'correct' : 'wrong');
-        for (const te of tokenEntries) te.expected = reps ? reps.dec : null;
+        resolveValue();
         tokenEntries[tokenEntries.length - 1].valueEnd = true;
-        if (full) correctValues++; else wrongValues++;
         byteIdx++;
         token = '';
         tokenEntries = [];
@@ -2032,23 +2109,16 @@ function computeByteStatuses(def) {
       else paint('wrong');                              // diverged → red
     }
   }
-  // Live-score the trailing (uncommitted) value once it's saturated — at that
-  // point it can't change, so it counts (correct if it matches a form, else
-  // wrong). A still-growable value stays unscored.
-  if (tokenEntries.length > 0) {
-    const reps = repsFor(byteIdx);
-    const full = !!reps && (token === reps.dec || token === reps.oct);
-    if (saturated(token)) {
-      if (full) {
-        correctValues++;
-        if (byteIdx === lastByte) state.doomFinalComplete = true;
-      } else {
-        wrongValues++;
-      }
-    }
+  // Resolve the trailing (uncommitted) value once it's saturated (it can't
+  // change) or was filled by Skip; a still-growable value stays unscored.
+  if (tokenEntries.length > 0 &&
+      (saturated(token) || tokenEntries.every(e => e.skipped))) {
+    resolveValue();
   }
-  state.doomScore = { correct: correctValues, wrong: wrongValues };
-  // The keypad hint counts values (bytes): the value currently being entered.
+  state.doomScore = {
+    correct: correctValues, wrong: wrongValues,
+    fixed: fixedValues, skipped: skippedValues, missed: missedValues,
+  };
   state.nextSeqIdx = byteIdx;
 }
 
@@ -2564,10 +2634,14 @@ function renderCodeColumns() {
       cell.className = 'doom-cell';
       userDigitsEl.appendChild(cell);
     }
-    // Colour is shown immediately (no pending grey): green while the value is
-    // a valid prefix / exact match, red once it diverges or resolves wrong.
+    // Colour is shown immediately (no pending grey while typing): green while
+    // a valid prefix / exact match, red on divergence. Skipped values render
+    // in the muted skipped style; fixed values get the dotted underline.
     const span = document.createElement('span');
-    span.className = 'digit ' + (e.status || 'pending');
+    let cls = 'digit ' + (e.status || 'pending');
+    if (e.skipped && e.status === 'correct') cls += ' skipped';
+    if (e.corrected) cls += ' corrected';
+    span.className = cls;
     span.textContent = e.char;
     cell.appendChild(span);
     if (e.valueEnd) {
@@ -2583,9 +2657,12 @@ function renderCodeColumns() {
   piDisplayEl.classList.remove('grouped', 'diff-mode');
   // The }; line only appears once the array is closed (run complete).
   piDisplayEl.classList.toggle('run-complete', state.sequenceComplete);
-  // Score by value: correct / incorrect committed bytes (computeByteStatuses).
-  const score = state.doomScore || { correct: 0, wrong: 0 };
-  updateStatTiles({ correct: score.correct, wrong: score.wrong, missed: 0, skipped: 0, fixed: 0 });
+  // Score by value across all five buckets (computeByteStatuses).
+  const score = state.doomScore || { correct: 0, wrong: 0, fixed: 0, skipped: 0, missed: 0 };
+  updateStatTiles({
+    correct: score.correct, wrong: score.wrong,
+    fixed: score.fixed || 0, skipped: score.skipped || 0, missed: score.missed || 0,
+  });
   updateKeypadHint();
   requestAnimationFrame(() => {
     piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
