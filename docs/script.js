@@ -406,7 +406,6 @@ const STORAGE_KEYS = {
   practiceDelay: 'pi-practice-delay',
   groupSize: 'pi-group-size',
   keypadFlip: 'pi-keypad-flip',
-  practiceDisplay: 'pi-practice-display',
   practiceAutoCheckStyle: 'pi-practice-autocheck-style',
   motionMode: 'pi-motion-mode',
   preZenMotion: 'pi-pre-zen-motion',
@@ -559,7 +558,6 @@ const compTimerEl = document.getElementById('comp-timer');
 const keypadHintEl = document.getElementById('keypad-hint');
 const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
-const practiceDisplayInputs = document.querySelectorAll('input[name="practice-display"]');
 const autoCheckStyleInputs = document.querySelectorAll('input[name="autocheck-style"]');
 const autoCheckStyleSetting = document.getElementById('autocheck-style-setting');
 const resetBtns = document.querySelectorAll('.setting-reset');
@@ -751,17 +749,6 @@ keypadFlipInputs.forEach(input => {
     applyKeypadFlip(input.value === 'numpad');
     localStorage.setItem(STORAGE_KEYS.keypadFlip, input.value);
     updateResetVisibility();
-  });
-});
-
-// ---- Practice display ----
-practiceDisplayInputs.forEach(input => {
-  input.addEventListener('change', () => {
-    if (!input.checked) return;
-    state.practiceDisplay = input.value;
-    localStorage.setItem(STORAGE_KEYS.practiceDisplay, input.value);
-    updateResetVisibility();
-    render();
   });
 });
 
@@ -3284,13 +3271,6 @@ resetBtns.forEach(btn => {
       applyKeypadFlip(DEFAULT_KEYPAD_FLIP);
       localStorage.setItem(STORAGE_KEYS.keypadFlip, DEFAULT_KEYPAD_FLIP ? 'numpad' : 'phone');
       updateResetVisibility();
-    } else if (target === 'practice-display') {
-      state.practiceDisplay = DEFAULT_PRACTICE_DISPLAY;
-      const radio = document.querySelector(`input[name="practice-display"][value="${DEFAULT_PRACTICE_DISPLAY}"]`);
-      if (radio) radio.checked = true;
-      localStorage.setItem(STORAGE_KEYS.practiceDisplay, DEFAULT_PRACTICE_DISPLAY);
-      updateResetVisibility();
-      render();
     } else if (target === 'autocheck-style') {
       state.practiceAutoCheckStyle = DEFAULT_AUTOCHECK_STYLE;
       const radio = document.querySelector(`input[name="autocheck-style"][value="${DEFAULT_AUTOCHECK_STYLE}"]`);
@@ -3333,7 +3313,6 @@ function updateResetVisibility() {
     else if (target === 'auto-check') isDefault = state.practiceDelay === DEFAULT_PRACTICE_DELAY;
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
-    else if (target === 'practice-display') isDefault = state.practiceDisplay === DEFAULT_PRACTICE_DISPLAY;
     else if (target === 'autocheck-style') isDefault = state.practiceAutoCheckStyle === DEFAULT_AUTOCHECK_STYLE;
     else if (target === 'motion-mode') isDefault = state.motionMode === defaultMotionMode();
     else if (target === 'hide-keypad') isDefault = state.hideKeypad === false;
@@ -3590,12 +3569,6 @@ function loadPersistedSettings() {
     applyKeypadFlip(savedFlip === 'numpad');
   } else {
     applyKeypadFlip(DEFAULT_KEYPAD_FLIP);
-  }
-  const savedPracticeDisplay = localStorage.getItem(STORAGE_KEYS.practiceDisplay);
-  if (savedPracticeDisplay === 'oneline' || savedPracticeDisplay === 'annotations') {
-    state.practiceDisplay = savedPracticeDisplay;
-    const radio = document.querySelector(`input[name="practice-display"][value="${savedPracticeDisplay}"]`);
-    if (radio) radio.checked = true;
   }
   const savedAutoCheckStyle = localStorage.getItem(STORAGE_KEYS.practiceAutoCheckStyle);
   if (savedAutoCheckStyle === 'per-digit' || savedAutoCheckStyle === 'on-idle') {
