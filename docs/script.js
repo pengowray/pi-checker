@@ -400,6 +400,12 @@ const DEFAULT_GROUP_SIZE = 0;
 const DEFAULT_SEQUENCE = 'pi';
 const MANUAL_DELAY = 31; // slider sentinel: no auto-check; user presses Check/Enter
 const SPRINT_LIMIT_SECONDS = 15 * 60;
+// Delayed checking (practice): when off, every digit is judged instantly; when
+// on, the auto-check delay / timing / max-unchecked controls apply and digits
+// stay editable until checked. Manual checking (Enter / Check) is a separate
+// practice toggle. Both default on (matching the old 5s-delay behaviour).
+const DEFAULT_DELAYED_CHECKING = true;
+const DEFAULT_ALLOW_MANUAL_CHECK = true;
 
 const STORAGE_KEYS = {
   theme: 'pi-theme',
@@ -407,6 +413,8 @@ const STORAGE_KEYS = {
   groupSize: 'pi-group-size',
   keypadFlip: 'pi-keypad-flip',
   practiceAutoCheckStyle: 'pi-practice-autocheck-style',
+  delayedChecking: 'pi-delayed-checking',
+  allowManualCheck: 'pi-allow-manual-check',
   motionMode: 'pi-motion-mode',
   preZenMotion: 'pi-pre-zen-motion',
   hideKeypad: 'pi-hide-keypad',
@@ -484,6 +492,11 @@ const state = {
   keypadFlipped: DEFAULT_KEYPAD_FLIP,
   practiceDisplay: DEFAULT_PRACTICE_DISPLAY,
   practiceAutoCheckStyle: DEFAULT_AUTOCHECK_STYLE,
+  // Practice-only: master switch for delayed (vs instant) checking, and
+  // whether Enter / Check can force-reveal pending digits. Forced per mode
+  // for sprint/hardcore/bullet (see delayedCheckingState / manualCheckState).
+  delayedChecking: DEFAULT_DELAYED_CHECKING,
+  allowManualCheck: DEFAULT_ALLOW_MANUAL_CHECK,
   compTimerHidden: false,
   elapsedDimmed: false,
   motionMode: defaultMotionMode(),
@@ -560,6 +573,10 @@ const themeInputs = document.querySelectorAll('input[name="theme"]');
 const keypadFlipInputs = document.querySelectorAll('input[name="keypad-flip"]');
 const autoCheckStyleInputs = document.querySelectorAll('input[name="autocheck-style"]');
 const autoCheckStyleSetting = document.getElementById('autocheck-style-setting');
+const autoDelaySetting = document.getElementById('auto-delay-setting');
+const delayedCheckingInputs = document.querySelectorAll('input[name="delayed-checking"]');
+const allowManualInputs = document.querySelectorAll('input[name="allow-manual"]');
+const allowManualSetting = document.getElementById('allow-manual-setting');
 const resetBtns = document.querySelectorAll('.setting-reset');
 const skippedTile = document.getElementById('stat-skipped-tile');
 const skipModal = document.getElementById('skip-modal');
@@ -761,6 +778,31 @@ autoCheckStyleInputs.forEach(input => {
     updateResetVisibility();
     refreshAutoCheckScheduling();
     updateModeBadge();
+    render();
+  });
+});
+
+// ---- Delayed checking master toggle (practice only) ----
+delayedCheckingInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    if (state.mode !== 'practice') return; // forced + locked in other modes
+    state.delayedChecking = input.value === 'on';
+    localStorage.setItem(STORAGE_KEYS.delayedChecking, state.delayedChecking ? '1' : '0');
+    // Recompute the effective delay (0 when off) and re-check any pending
+    // digits accordingly, then refresh the section's visibility.
+    applyModeDefaults();
+    render();
+  });
+});
+
+// ---- Allow manual checking toggle (practice only) ----
+allowManualInputs.forEach(input => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    if (manualCheckState().locked) return; // can't change when forced
+    state.allowManualCheck = input.value === 'on';
+    localStorage.setItem(STORAGE_KEYS.allowManualCheck, state.allowManualCheck ? '1' : '0');
     render();
   });
 });
@@ -1017,6 +1059,8 @@ autoSecondsInput.addEventListener('input', () => {
   renderDelayLabel();
   updateModeBadge();
   updateResetVisibility();
+  // Crossing into / out of "manual" forces the manual-check toggle on/off.
+  syncDelayedCheckingControls();
   if (hasPending()) {
     if (useOnIdleAutoCheck()) {
       resetAutoCheckTimer();
@@ -1034,6 +1078,80 @@ function isManual() {
 
 function renderDelayLabel() {
   autoSecondsLabel.textContent = isManual() ? 'manual' : state.autoCheckSeconds + 's';
+}
+
+// ---- Delayed checking (practice) + per-mode forcing ----
+// Effective delayed-checking state for the current mode. `on` = digits are
+// held unjudged (vs instant); `locked` = can't be toggled (sprint/hardcore/
+// bullet force a fixed value).
+function delayedCheckingState() {
+  if (state.mode === 'sprint') return { on: true, locked: true };
+  if (state.mode === 'hardcore' || state.mode === 'bullet') return { on: false, locked: true };
+  return { on: state.delayedChecking, locked: false };
+}
+
+// Whether Enter / Check can force-reveal pending digits, plus whether the
+// toggle is locked. Sprint/hardcore/bullet never allow it. In practice it's
+// the user's choice, except a "manual" auto-check delay forces it on (manual
+// is then the only way to check) and instant checking makes it moot.
+function manualCheckState() {
+  const dc = delayedCheckingState();
+  if (!dc.on) return { allowed: false, locked: true };
+  if (state.mode !== 'practice') return { allowed: false, locked: true };
+  if (isManual()) return { allowed: true, locked: true };
+  return { allowed: state.allowManualCheck, locked: false };
+}
+
+function manualCheckAllowed() {
+  return manualCheckState().allowed;
+}
+
+// Reflects the delayed-checking section into the DOM: both toggles, which
+// sub-settings are visible, and (for the read-only non-practice view) their
+// values + disabled state. Practice values come from state; sprint shows its
+// fixed behaviour greyed without touching the remembered practice settings.
+function syncDelayedCheckingControls() {
+  const dc = delayedCheckingState();
+  const man = manualCheckState();
+  const isPractice = state.mode === 'practice';
+
+  delayedCheckingInputs.forEach(i => {
+    i.checked = (i.value === 'on') === dc.on;
+    i.disabled = dc.locked;
+  });
+
+  // Sub-settings appear only when delayed checking is on for this mode.
+  const subHidden = !dc.on;
+  if (autoDelaySetting) autoDelaySetting.hidden = subHidden;
+  if (autoCheckStyleSetting) autoCheckStyleSetting.hidden = subHidden;
+  if (practiceLookaheadSetting) practiceLookaheadSetting.hidden = subHidden;
+  if (allowManualSetting) allowManualSetting.hidden = subHidden;
+
+  // Auto-check timing: practice from state; sprint fixed at per-digit.
+  autoCheckStyleInputs.forEach(i => {
+    const val = isPractice ? state.practiceAutoCheckStyle : 'per-digit';
+    i.checked = i.value === val;
+    i.disabled = !isPractice;
+  });
+
+  // Max unchecked digits: practice from state; sprint fixed at SPRINT_LOOKAHEAD.
+  if (practiceLookaheadInput) {
+    if (isPractice) {
+      practiceLookaheadInput.disabled = false;
+      practiceLookaheadInput.value = String(lookaheadStateToSlider(state.practiceLookahead));
+      renderLookaheadLabel();
+    } else {
+      practiceLookaheadInput.disabled = true;
+      practiceLookaheadInput.value = String(SPRINT_LOOKAHEAD);
+      const labelEl = document.getElementById('practice-lookahead-label');
+      if (labelEl) labelEl.textContent = SPRINT_LOOKAHEAD + ' digits';
+    }
+  }
+
+  allowManualInputs.forEach(i => {
+    i.checked = (i.value === 'on') === man.allowed;
+    i.disabled = man.locked;
+  });
 }
 
 function processModeChange(newMode, targetInput) {
@@ -1171,7 +1289,8 @@ function applyModeDefaults() {
   if (state.mode in MODE_FIXED_DELAY) {
     state.autoCheckSeconds = MODE_FIXED_DELAY[state.mode];
   } else {
-    state.autoCheckSeconds = state.practiceDelay;
+    // Practice: delayed checking off means judge every digit instantly.
+    state.autoCheckSeconds = state.delayedChecking ? state.practiceDelay : 0;
   }
   autoSecondsInput.value = state.autoCheckSeconds;
   // Low motion + practice starts with the elapsed timer dimmed; users
@@ -1180,6 +1299,7 @@ function applyModeDefaults() {
   state.elapsedDimmed = (state.motionMode === 'low' && state.mode === 'practice');
   renderDelayLabel();
   updateModeBadge();
+  syncDelayedCheckingControls();
   refreshAutoCheckScheduling();
 }
 
@@ -1805,9 +1925,10 @@ function redo() {
 
 function forceCheck() {
   if (isInputLocked()) return;
-  // Sprint disallows manual force-checks — only the per-digit and
-  // lookahead auto-checks should reveal results.
-  if (state.mode === 'sprint') return;
+  // Manual checking is disallowed in sprint/hardcore/bullet and when the
+  // practice "Allow manual checking" toggle is off, so only the per-digit /
+  // lookahead auto-checks reveal results.
+  if (!manualCheckAllowed()) return;
   if (state.autoCheckTimer) {
     clearTimeout(state.autoCheckTimer);
     state.autoCheckTimer = null;
@@ -2862,7 +2983,9 @@ function updateUI() {
   modeInputs.forEach(input => { input.checked = input.value === state.mode; });
   modeInputs.forEach(input => { input.disabled = false; input.parentElement.title = ''; });
   autoSecondsInput.disabled = (state.mode in MODE_FIXED_DELAY) || state.gameLocked;
-  if (autoCheckStyleSetting) autoCheckStyleSetting.hidden = state.mode !== 'practice';
+  // Delayed-checking section: toggles, sub-setting visibility, and the
+  // greyed read-only values shown for sprint.
+  syncDelayedCheckingControls();
 
   // Digit keys: disable if locked OR character not in current alphabet
   allDigitBtns.forEach(btn => {
@@ -2882,9 +3005,9 @@ function updateUI() {
   }
   allBackBtns.forEach(btn => { btn.disabled = backDisabled; });
 
-  // Sprint: no manual force-check — only the per-digit / lookahead
-  // auto-checks reveal results. Disable the check button outright.
-  const checkDisabled = inputLocked || !hasPending() || state.mode === 'sprint';
+  // The check button only works where manual checking is allowed (not in
+  // sprint/hardcore/bullet, nor when the practice toggle is off).
+  const checkDisabled = inputLocked || !hasPending() || !manualCheckAllowed();
   allCheckBtns.forEach(btn => { btn.disabled = checkDisabled; });
 
   // Stop button: ends in comp/hardcore/bullet, pseudo-pauses in practice
@@ -2924,8 +3047,6 @@ function updateUI() {
   keypadDecimal.classList.toggle('user-hidden', state.hideKeypad);
   keypadHex.classList.toggle('user-hidden', state.hideKeypad);
 
-  // Practice-lookahead setting is practice-only.
-  if (practiceLookaheadSetting) practiceLookaheadSetting.hidden = state.mode !== 'practice';
   // Bullet-timing setting is bullet-only. Lock the three inputs the
   // moment the run starts (or is game-over) so the player can't
   // retroactively change start/bonus/penalty mid-run; Reset is required
@@ -3309,14 +3430,18 @@ function updateResetVisibility() {
   resetBtns.forEach(btn => {
     const target = btn.dataset.reset;
     let isDefault = true;
+    // The delayed-checking sub-settings are read-only outside practice, so
+    // their reset (x) is force-hidden there even if the remembered practice
+    // value differs from default.
+    const practiceOnly = state.mode === 'practice';
     if (target === 'sequence') isDefault = state.sequenceId === DEFAULT_SEQUENCE;
-    else if (target === 'auto-check') isDefault = state.practiceDelay === DEFAULT_PRACTICE_DELAY;
+    else if (target === 'auto-check') isDefault = !practiceOnly || state.practiceDelay === DEFAULT_PRACTICE_DELAY;
     else if (target === 'group-size') isDefault = state.groupSize === DEFAULT_GROUP_SIZE;
     else if (target === 'keypad-flip') isDefault = state.keypadFlipped === DEFAULT_KEYPAD_FLIP;
-    else if (target === 'autocheck-style') isDefault = state.practiceAutoCheckStyle === DEFAULT_AUTOCHECK_STYLE;
+    else if (target === 'autocheck-style') isDefault = !practiceOnly || state.practiceAutoCheckStyle === DEFAULT_AUTOCHECK_STYLE;
     else if (target === 'motion-mode') isDefault = state.motionMode === defaultMotionMode();
     else if (target === 'hide-keypad') isDefault = state.hideKeypad === false;
-    else if (target === 'practice-lookahead') isDefault = state.practiceLookahead === DEFAULT_PRACTICE_LOOKAHEAD;
+    else if (target === 'practice-lookahead') isDefault = !practiceOnly || state.practiceLookahead === DEFAULT_PRACTICE_LOOKAHEAD;
     else if (target === 'bullet') {
       // Reset-to-default is also hidden once a bullet run is in flight
       // (or post-game-over), matching the lock on the three inputs — the
@@ -3575,6 +3700,14 @@ function loadPersistedSettings() {
     state.practiceAutoCheckStyle = savedAutoCheckStyle;
     const radio = document.querySelector(`input[name="autocheck-style"][value="${savedAutoCheckStyle}"]`);
     if (radio) radio.checked = true;
+  }
+  const savedDelayedChecking = localStorage.getItem(STORAGE_KEYS.delayedChecking);
+  if (savedDelayedChecking === '0' || savedDelayedChecking === '1') {
+    state.delayedChecking = savedDelayedChecking === '1';
+  }
+  const savedAllowManual = localStorage.getItem(STORAGE_KEYS.allowManualCheck);
+  if (savedAllowManual === '0' || savedAllowManual === '1') {
+    state.allowManualCheck = savedAllowManual === '1';
   }
   // Restore preZenMotion FIRST so a reload-in-zen still knows what to
   // exit back to; applyMotionMode wouldn't overwrite it (we're not

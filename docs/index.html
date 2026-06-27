@@ -37,7 +37,7 @@
   </script>
   <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
        stale script.css/js for up to 10 min after a push. -->
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <header>
@@ -149,12 +149,12 @@
         <button id="settings-close" aria-label="Close" data-close>&#x2715;</button>
       </div>
       <div class="modal-body">
+        <h3 class="settings-subhead">Sequence
+          <button type="button" class="setting-reset" data-reset="sequence" hidden aria-label="Reset sequence to default">&#x2715;</button>
+        </h3>
+
         <div class="setting">
-          <div class="setting-label">
-            <label for="sequence">Sequence</label>
-            <button type="button" class="setting-reset" data-reset="sequence" hidden aria-label="Reset sequence to default">&#x2715;</button>
-          </div>
-          <select id="sequence" class="setting-select">
+          <select id="sequence" class="setting-select" aria-label="Sequence">
             <option value="pi">&pi; (pi)</option>
             <option value="tau">&tau; (tau = 2&pi;)</option>
             <option value="pi-squared">&pi;&sup2; (pi squared)</option>
@@ -179,8 +179,9 @@
           <small id="sequence-digits-hint" class="hint"></small>
         </div>
 
+        <h3 class="settings-subhead">Mode</h3>
+
         <div class="setting">
-          <div class="setting-label">Mode</div>
           <div class="mode-selector" role="radiogroup" aria-label="Mode">
             <label class="mode-option">
               <input type="radio" name="mode" value="practice" checked>
@@ -200,6 +201,48 @@
             </label>
           </div>
           <small id="mode-hint" class="hint"></small>
+        </div>
+
+        <div class="setting" id="bullet-settings">
+          <div class="setting-label">
+            Bullet timing
+            <button type="button" class="setting-reset" data-reset="bullet" hidden aria-label="Reset bullet timing to defaults">&#x2715;</button>
+          </div>
+          <div class="bullet-fields">
+            <label class="bullet-field">
+              <span>Start</span>
+              <input type="number" id="bullet-start" min="5" max="3600" value="60" inputmode="numeric">
+              <span class="bullet-suffix">s</span>
+            </label>
+            <label class="bullet-field">
+              <span>+ Correct</span>
+              <input type="number" id="bullet-bonus" min="0" max="60" value="5" inputmode="numeric">
+              <span class="bullet-suffix">s</span>
+            </label>
+            <label class="bullet-field">
+              <span>&minus; Wrong</span>
+              <input type="number" id="bullet-penalty" min="0" max="120" value="30" inputmode="numeric">
+              <span class="bullet-suffix">s</span>
+            </label>
+          </div>
+          <small class="hint">Start countdown; bonus added per correct digit; penalty deducted per wrong (refunded if it later re-scores correct via missed-detection).</small>
+        </div>
+
+        <h3 class="settings-subhead" id="delayed-checking-subhead">Delayed checking</h3>
+
+        <div class="setting" id="delayed-checking-setting">
+          <div class="setting-label">Delayed checking</div>
+          <div class="mode-selector" role="radiogroup" aria-label="Delayed checking">
+            <label class="mode-option">
+              <input type="radio" name="delayed-checking" value="on" checked>
+              <span>On</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="delayed-checking" value="off">
+              <span>Off</span>
+            </label>
+          </div>
+          <small class="hint">Holds your most recent digits unjudged for a moment so you can self-correct before they are scored.</small>
         </div>
 
         <div class="setting" id="auto-delay-setting">
@@ -228,31 +271,6 @@
           <small class="hint">Per digit: each digit is checked individually after the delay. On idle: the delay restarts on every key, so a burst is checked together.</small>
         </div>
 
-        <div class="setting" id="bullet-settings">
-          <div class="setting-label">
-            Bullet timing
-            <button type="button" class="setting-reset" data-reset="bullet" hidden aria-label="Reset bullet timing to defaults">&#x2715;</button>
-          </div>
-          <div class="bullet-fields">
-            <label class="bullet-field">
-              <span>Start</span>
-              <input type="number" id="bullet-start" min="5" max="3600" value="60" inputmode="numeric">
-              <span class="bullet-suffix">s</span>
-            </label>
-            <label class="bullet-field">
-              <span>+ Correct</span>
-              <input type="number" id="bullet-bonus" min="0" max="60" value="5" inputmode="numeric">
-              <span class="bullet-suffix">s</span>
-            </label>
-            <label class="bullet-field">
-              <span>&minus; Wrong</span>
-              <input type="number" id="bullet-penalty" min="0" max="120" value="30" inputmode="numeric">
-              <span class="bullet-suffix">s</span>
-            </label>
-          </div>
-          <small class="hint">Start countdown; bonus added per correct digit; penalty deducted per wrong (refunded if it later re-scores correct via missed-detection).</small>
-        </div>
-
         <div class="setting" id="practice-lookahead-setting">
           <div class="setting-label">
             Max unchecked digits: <strong id="practice-lookahead-label">2 digits</strong>
@@ -260,6 +278,58 @@
           </div>
           <input type="range" id="practice-lookahead" min="1" max="21" value="2" step="1" aria-label="Lookahead">
           <small class="hint">How many digits that can be unchecked at once. When exceeded, the earliest unchecked digit will be checked immediately.</small>
+        </div>
+
+        <div class="setting" id="allow-manual-setting">
+          <div class="setting-label">Allow manual checking (Enter)</div>
+          <div class="mode-selector" role="radiogroup" aria-label="Allow manual checking">
+            <label class="mode-option">
+              <input type="radio" name="allow-manual" value="on" checked>
+              <span>On</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="allow-manual" value="off">
+              <span>Off</span>
+            </label>
+          </div>
+          <small class="hint">Press Enter or the check key to judge pending digits now. Turning it off encourages persisting without relying on immediate feedback.</small>
+        </div>
+
+        <h3 class="settings-subhead">Keypad</h3>
+
+        <div class="setting">
+          <div class="setting-label">
+            Show keypad
+            <button type="button" class="setting-reset" data-reset="hide-keypad" hidden aria-label="Reset keypad to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Show keypad">
+            <label class="mode-option">
+              <input type="radio" name="hide-keypad" value="show" checked>
+              <span>Show</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="hide-keypad" value="hide">
+              <span>Hide</span>
+            </label>
+          </div>
+          <small class="hint">On a phone, the on-screen keypad is how you enter digits. Hide it to use more screen space, then tap the digits to bring up your device keyboard instead.</small>
+        </div>
+
+        <div class="setting">
+          <div class="setting-label">
+            Keypad layout
+            <button type="button" class="setting-reset" data-reset="keypad-flip" hidden aria-label="Reset keypad layout to default">&#x2715;</button>
+          </div>
+          <div class="mode-selector" role="radiogroup" aria-label="Keypad layout">
+            <label class="mode-option">
+              <input type="radio" name="keypad-flip" value="phone" checked>
+              <span>Phone (1 top)</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="keypad-flip" value="numpad">
+              <span>Numpad (7 top)</span>
+            </label>
+          </div>
         </div>
 
         <h3 class="settings-subhead">Display</h3>
@@ -291,23 +361,6 @@
         </div>
 
         <div class="setting">
-          <div class="setting-label">
-            Keypad
-            <button type="button" class="setting-reset" data-reset="hide-keypad" hidden aria-label="Reset keypad to default">&#x2715;</button>
-          </div>
-          <div class="mode-selector" role="radiogroup" aria-label="Show keypad">
-            <label class="mode-option">
-              <input type="radio" name="hide-keypad" value="show" checked>
-              <span>Show</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="hide-keypad" value="hide">
-              <span>Hide</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="setting">
           <div class="setting-label">Theme</div>
           <div class="mode-selector" role="radiogroup" aria-label="Theme">
             <label class="mode-option">
@@ -317,23 +370,6 @@
             <label class="mode-option">
               <input type="radio" name="theme" value="dark">
               <span>Dark</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="setting">
-          <div class="setting-label">
-            Keypad layout
-            <button type="button" class="setting-reset" data-reset="keypad-flip" hidden aria-label="Reset keypad layout to default">&#x2715;</button>
-          </div>
-          <div class="mode-selector" role="radiogroup" aria-label="Keypad layout">
-            <label class="mode-option">
-              <input type="radio" name="keypad-flip" value="phone" checked>
-              <span>Phone (1 top)</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="keypad-flip" value="numpad">
-              <span>Numpad (7 top)</span>
             </label>
           </div>
         </div>
@@ -423,7 +459,7 @@
     </div>
   </div>
 
-  <script src="sequences.js?v=8"></script>
-  <script src="script.js?v=8"></script>
+  <script src="sequences.js?v=9"></script>
+  <script src="script.js?v=9"></script>
 </body>
 </html>

@@ -1047,3 +1047,81 @@ test('bullet: cycling "1415" via backspace cannot rack up bonuses', async ({ pag
 
   await expect(page.locator('#bullet-score-correct')).toHaveText('4');
 });
+
+// ---- Delayed checking + manual checking ----
+
+test('delayed checking: defaults on in practice, toggling off hides the sub-settings', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('input[name="delayed-checking"][value="on"]')).toBeChecked();
+  await expect(page.locator('#auto-delay-setting')).toBeVisible();
+  await expect(page.locator('#autocheck-style-setting')).toBeVisible();
+  await expect(page.locator('#practice-lookahead-setting')).toBeVisible();
+  await expect(page.locator('#allow-manual-setting')).toBeVisible();
+  await expect(page.locator('input[name="allow-manual"][value="on"]')).toBeChecked();
+
+  await page.locator('input[name="delayed-checking"][value="off"]').check({ force: true });
+  await expect(page.locator('#auto-delay-setting')).toBeHidden();
+  await expect(page.locator('#autocheck-style-setting')).toBeHidden();
+  await expect(page.locator('#practice-lookahead-setting')).toBeHidden();
+  await expect(page.locator('#allow-manual-setting')).toBeHidden();
+});
+
+test('delayed checking: hardcore and bullet force it off and disabled (sub-settings hidden)', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await setMode(page, 'hardcore');
+  await expect(page.locator('input[name="delayed-checking"][value="off"]')).toBeChecked();
+  await expect(page.locator('input[name="delayed-checking"][value="on"]')).toBeDisabled();
+  await expect(page.locator('#auto-delay-setting')).toBeHidden();
+  await expect(page.locator('#allow-manual-setting')).toBeHidden();
+
+  await setMode(page, 'bullet');
+  await expect(page.locator('input[name="delayed-checking"][value="off"]')).toBeChecked();
+  await expect(page.locator('input[name="delayed-checking"][value="on"]')).toBeDisabled();
+  await expect(page.locator('#auto-delay-setting')).toBeHidden();
+});
+
+test('delayed checking: sprint forces it on and disabled, sub-settings shown read-only', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await setMode(page, 'sprint');
+  await expect(page.locator('input[name="delayed-checking"][value="on"]')).toBeChecked();
+  await expect(page.locator('input[name="delayed-checking"][value="off"]')).toBeDisabled();
+  // Sub-settings are visible but read-only, reflecting sprint's fixed behaviour.
+  await expect(page.locator('#auto-delay-setting')).toBeVisible();
+  await expect(page.locator('#auto-seconds')).toBeDisabled();
+  await expect(page.locator('#auto-seconds')).toHaveValue('30');
+  await expect(page.locator('input[name="autocheck-style"][value="per-digit"]')).toBeChecked();
+  await expect(page.locator('input[name="autocheck-style"][value="per-digit"]')).toBeDisabled();
+  await expect(page.locator('#practice-lookahead')).toBeDisabled();
+  await expect(page.locator('#practice-lookahead-label')).toHaveText('10 digits');
+  await expect(page.locator('input[name="allow-manual"][value="off"]')).toBeChecked();
+  await expect(page.locator('input[name="allow-manual"][value="on"]')).toBeDisabled();
+});
+
+test('manual checking: a "manual" auto-check delay forces allow-manual on and disabled', async ({ page }) => {
+  await setAutoCheckSeconds(page, 31); // 31 = manual sentinel
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('input[name="allow-manual"][value="on"]')).toBeChecked();
+  await expect(page.locator('input[name="allow-manual"][value="off"]')).toBeDisabled();
+});
+
+test('delayed checking off: each digit is judged instantly', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await page.locator('input[name="delayed-checking"][value="off"]').check({ force: true });
+  await page.locator('#settings-close').click();
+  await page.keyboard.type('1');
+  const cls = await page.locator('#user-digits .digit').first().getAttribute('class');
+  expect(cls).toMatch(/\bcorrect\b/);
+  expect(cls).not.toMatch(/\bpending\b/);
+});
+
+test('manual checking off: Enter does not reveal pending digits', async ({ page }) => {
+  // A long delay keeps the digit pending; lookahead default (2) won't trip on one digit.
+  await setAutoCheckSeconds(page, 30);
+  await page.locator('#settings-toggle').click();
+  await page.locator('input[name="allow-manual"][value="off"]').check({ force: true });
+  await page.locator('#settings-close').click();
+  await page.keyboard.type('1');
+  await page.keyboard.press('Enter');
+  const cls = await page.locator('#user-digits .digit').first().getAttribute('class');
+  expect(cls).toMatch(/\bpending\b/);
+});

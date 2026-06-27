@@ -233,6 +233,9 @@ main {
 }
 
 .settings-subhead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 1.4rem 0 0.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
@@ -241,6 +244,21 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--accent);
+}
+
+/* The first subhead sits right under the modal header, so it needs no
+   divider of its own. */
+.settings-subhead:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* Reset (x) hosted inside a subhead (e.g. Sequence) keeps the normal
+   small-button look, just right-aligned via the .setting-reset margin. */
+.settings-subhead .setting-reset {
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .mode-selector {
@@ -703,14 +721,17 @@ input[type="range"]:disabled {
 }
 
 /* DOOM (code sequence, applySequence sets .code-seq on <html>): only practice /
-   hardcore apply, so hide the other game modes and the auto-check options that
-   don't fit value-by-value scoring. */
+   hardcore apply, so hide the other game modes and the whole delayed-checking
+   section, which doesn't fit value-by-value scoring. */
 html.code-seq .mode-selector .mode-option:has(input[name="mode"][value="sprint"]),
 html.code-seq .mode-selector .mode-option:has(input[name="mode"][value="bullet"]),
+html.code-seq #bullet-settings,
+html.code-seq #delayed-checking-subhead,
+html.code-seq #delayed-checking-setting,
 html.code-seq #auto-delay-setting,
 html.code-seq #autocheck-style-setting,
-html.code-seq #bullet-settings,
-html.code-seq #practice-lookahead-setting {
+html.code-seq #practice-lookahead-setting,
+html.code-seq #allow-manual-setting {
   display: none;
 }
 
