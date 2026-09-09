@@ -24,7 +24,12 @@ const DOOM_RND = [
 ];
 
 test.beforeEach(async ({ page }) => {
+  // These scoring regressions exercise delayed practice explicitly. Fresh-user
+  // defaults and the attempt/practice flow are covered in modes.spec.js.
+  await page.addInitScript(() => localStorage.setItem('pi-delayed-checking', '1'));
   await page.goto('/');
+  await page.locator('#practice-switch').check();
+  await page.locator('#practice-switch').evaluate(el => el.blur());
 });
 
 // The sequence selector lives inside the settings modal, which is hidden by
@@ -925,6 +930,14 @@ test('per-digit: each digit checks on its own deadline (later digits stay pendin
 test('on-idle: timer resets on each keystroke (no digit is checked while typing continues)', async ({ page }) => {
   await setAutoCheckStyle(page, 'on-idle');
   await setAutoCheckSeconds(page, 1);
+  // Isolate the idle timer: the default two-digit cap would otherwise check
+  // the first digit as soon as the third is typed, regardless of elapsed time.
+  await page.locator('#settings-toggle').click();
+  await page.locator('#practice-lookahead').evaluate(el => {
+    el.value = '21'; // off
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.locator('#settings-close').click();
   // Type a digit, wait under the threshold, type another, wait under, etc.
   await page.keyboard.type('1');
   await page.waitForTimeout(400);
@@ -1050,7 +1063,7 @@ test('bullet: cycling "1415" via backspace cannot rack up bonuses', async ({ pag
 
 // ---- Delayed checking + manual checking ----
 
-test('delayed checking: defaults on in practice, toggling off hides the sub-settings', async ({ page }) => {
+test('delayed checking: when enabled in practice, toggling off hides the sub-settings', async ({ page }) => {
   await page.locator('#settings-toggle').click();
   await expect(page.locator('input[name="delayed-checking"][value="on"]')).toBeChecked();
   await expect(page.locator('#auto-delay-setting')).toBeVisible();

@@ -181,6 +181,75 @@ main {
 
 .mode-badge:hover { background: var(--key-hover); }
 
+.mode-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.mode-toolbar .mode-badge { margin: 0 auto 0 0; }
+.mode-toolbar [hidden] { display: none; }
+.practice-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.practice-switch strong {
+  display: inline-block;
+  min-width: 1.6em;
+  font-weight: 500;
+  color: var(--fg);
+}
+.practice-switch input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  border: 0;
+  border-radius: 16px;
+  background: #c4c9d1;
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+.practice-switch input::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 180ms ease;
+}
+.practice-switch input:checked { background: #64748b; }
+.practice-switch input:checked::before { transform: translateX(12px); }
+[data-theme="dark"] .practice-switch input { background: #505867; }
+[data-theme="dark"] .practice-switch input:checked { background: #94a3b8; }
+.practice-switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.practice-stat {
+  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms;
+}
+.practice-stat.concealed { opacity: 0; visibility: hidden; transform: translateY(-5px); }
+:root[data-motion="low"] .practice-stat,
+:root[data-motion="zen"] .practice-stat { transform: none; transition: opacity 150ms ease, visibility 150ms; }
+:root[data-motion="low"] .practice-switch input::before,
+:root[data-motion="zen"] .practice-switch input::before { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .practice-stat { transform: none !important; transition: opacity 150ms ease, visibility 150ms; }
+  .practice-switch input::before { transition: none; }
+}
+
 .mode-badge.locked::before {
   content: "\1F512";
   font-size: 0.8em;
@@ -774,6 +843,7 @@ html.code-seq #allow-manual-setting {
    (unless the user separately hid it) remain. */
 :root[data-motion="zen"] header,
 :root[data-motion="zen"] .mode-badge,
+:root[data-motion="zen"] .mode-toolbar,
 :root[data-motion="zen"] .comp-timer,
 :root[data-motion="zen"] .actions,
 :root[data-motion="zen"] .keypad-hint {
@@ -1390,6 +1460,7 @@ html.code-seq #allow-manual-setting {
 
 .actions {
   display: grid;
+  min-height: 44px;
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.6rem;
@@ -1398,6 +1469,7 @@ html.code-seq #allow-manual-setting {
 
 .actions-conditional {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 0.5rem;
 }
@@ -1482,7 +1554,7 @@ html.code-seq #allow-manual-setting {
   opacity: 0.7;
 }
 
-#reset-btn {
+#reset-btn, #new-attempt-btn {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--fg);
@@ -1494,6 +1566,13 @@ html.code-seq #allow-manual-setting {
 }
 
 #reset-btn:hover { background: var(--key-hover); }
+#new-attempt-btn { color: var(--muted); padding: 0.4rem 0.7rem; font-size: 0.85rem; }
+#new-attempt-btn:hover { background: var(--key-hover); color: var(--fg); }
+.actions.practice-actions { display: flex; flex-wrap: wrap; }
+.practice-actions .actions-conditional { display: contents; }
+.practice-actions #reset-btn { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+.practice-actions #new-attempt-btn { white-space: nowrap; }
+.practice-actions .stat-time { margin-left: auto; }
 
 #reset-btn.primary {
   background: var(--accent);
@@ -1579,6 +1658,7 @@ html.code-seq #allow-manual-setting {
 
   .keypad-hint { grid-area: hint; margin: 0; font-size: 0.72rem; }
 
+  .mode-toolbar { grid-area: badge; margin: 0; }
   #mode-badge {
     grid-area: badge;
     justify-self: start;

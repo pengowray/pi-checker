@@ -403,8 +403,8 @@ const SPRINT_LIMIT_SECONDS = 15 * 60;
 // Delayed checking (practice): when off, every digit is judged instantly; when
 // on, the auto-check delay / timing / max-unchecked controls apply and digits
 // stay editable until checked. Manual checking (Enter / Check) is a separate
-// practice toggle. Both default on (matching the old 5s-delay behaviour).
-const DEFAULT_DELAYED_CHECKING = true;
+// practice toggle. Delayed checking is opt-in; instant checking is the default.
+const DEFAULT_DELAYED_CHECKING = false;
 const DEFAULT_ALLOW_MANUAL_CHECK = true;
 
 const STORAGE_KEYS = {
@@ -463,8 +463,8 @@ const state = {
   acceptAny: !!SEQUENCES.pi.acceptAny, // <3 mode: every typed digit counts as correct
   commaIsSpace: !!SEQUENCES.pi.commaIsSpace, // typed comma recorded as a space
   integerCharsConsumed: 0, // how many leading integer-part chars the user has typed
-  mode: 'practice',
-  autoCheckSeconds: DEFAULT_PRACTICE_DELAY,
+  mode: 'hardcore',
+  autoCheckSeconds: 0,
   practiceDelay: DEFAULT_PRACTICE_DELAY, // remember user's choice for practice mode
   // Each entry: { char, t, skipped, checked, status, expected, missedBefore }
   entries: [],
@@ -558,6 +558,11 @@ const themeToggle = document.getElementById('theme-toggle');
 const settingsToggle = document.getElementById('settings-toggle');
 const settingsModal = document.getElementById('settings-modal');
 const resetBtn = document.getElementById('reset-btn');
+const newAttemptBtn = document.getElementById('new-attempt-btn');
+const practiceSwitch = document.getElementById('practice-switch');
+const practiceSwitchLabel = document.getElementById('practice-switch-label');
+const practiceSwitchState = document.getElementById('practice-switch-state');
+const practiceStats = document.querySelectorAll('.practice-stat');
 const stopBtn = document.getElementById('stop-btn');
 const continueBtn = document.getElementById('continue-btn');
 const keypadDecimal = document.getElementById('keypad-decimal');
@@ -1191,7 +1196,9 @@ function attemptModeChange(newMode) {
   // Hardcore, Sprint, and Bullet always start from a fresh session.
   if (newMode === 'sprint' || newMode === 'hardcore' || newMode === 'bullet') {
     if (state.entries.length > 0) {
-      const ok = confirm('This will reset your current progress. Start a new ' + newMode + ' session?');
+      const ok = confirm(newMode === 'hardcore'
+        ? 'Start a new attempt? This clears your current progress and turns practice off.'
+        : 'This will reset your current progress. Start a new ' + newMode + ' session?');
       if (!ok) return false;
     }
     clearSession();
@@ -1304,6 +1311,19 @@ function applyModeDefaults() {
 }
 
 function updateModeBadge() {
+  const practice = state.mode === 'practice';
+  const attempt = state.mode === 'hardcore';
+  practiceSwitchLabel.hidden = !(practice || attempt);
+  practiceSwitch.checked = practice;
+  practiceSwitchState.textContent = practice ? 'on' : 'off';
+  // Keep timing details for opt-in delayed practice and the timed modes.
+  // The switch alone identifies ordinary practice and untimed attempts.
+  modeBadge.hidden = attempt || (practice && !state.delayedChecking);
+  practiceStats.forEach(tile => {
+    tile.classList.toggle('concealed', attempt);
+    tile.setAttribute('aria-hidden', String(attempt));
+    if (tile.hasAttribute('tabindex')) tile.tabIndex = attempt ? -1 : 0;
+  });
   // Sequences with renamed modes (DOOM) show just the skill-level name — the
   // auto-check/timing detail doesn't apply to value scoring.
   const def = SEQUENCES[state.sequenceId];
@@ -3022,6 +3042,10 @@ function updateUI() {
   // On game over — or a finished finite run — the user's natural action is
   // to start over, so make Reset the prominent button and demote Continue.
   resetBtn.classList.toggle('primary', gameOver || complete);
+  resetBtn.textContent = state.mode === 'practice' ? 'Reset practice'
+    : state.mode === 'hardcore' ? (gameOver || complete ? 'Try again' : 'Restart') : 'Reset';
+  newAttemptBtn.hidden = state.mode !== 'practice';
+  resetBtn.closest('.actions').classList.toggle('practice-actions', state.mode === 'practice');
   continueBtn.classList.toggle('secondary', gameOver);
   // Big top timer is used in sprint AND bullet, but only in high
   // motion. Medium/low fold the countdown into the bottom-right
@@ -3124,6 +3148,14 @@ allDigitBtns.forEach(btn => {
 allBackBtns.forEach(btn => wireKey(btn, backspace));
 allCheckBtns.forEach(btn => wireKey(btn, forceCheck));
 resetBtn.addEventListener('click', reset);
+function startNewAttempt() {
+  processModeChange('hardcore', document.querySelector('input[name="mode"][value="hardcore"]'));
+}
+newAttemptBtn.addEventListener('click', startNewAttempt);
+practiceSwitch.addEventListener('change', () => {
+  const mode = practiceSwitch.checked ? 'practice' : 'hardcore';
+  processModeChange(mode, document.querySelector(`input[name="mode"][value="${mode}"]`));
+});
 stopBtn.addEventListener('click', () => {
   if (state.mode === 'sprint') endSprint();
   else if (state.mode === 'hardcore') endHardcore();
@@ -3159,7 +3191,9 @@ if (zenExitBtn) zenExitBtn.addEventListener('click', exitZenMode);
 
 document.addEventListener('keydown', (e) => {
   const tag = (e.target && e.target.tagName) || '';
-  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if ((tag === 'INPUT' && e.target !== practiceSwitch) || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  // Space toggles the focused switch, including for space-separated sequences.
+  if (e.target === practiceSwitch && e.key === ' ') return;
 
   // Ctrl/Cmd+Z = undo, Ctrl/Cmd+Shift+Z and Ctrl+Y = redo. Handled before
   // the modifier early-return below so the browser's default (which is

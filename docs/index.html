@@ -37,7 +37,7 @@
   </script>
   <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
        stale script.css/js for up to 10 min after a push. -->
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <header>
@@ -53,7 +53,13 @@
 
   <main>
     <div id="comp-timer" class="comp-timer" hidden role="button" tabindex="0" aria-label="Sprint countdown, click to hide" title="Click to hide / show">15:00</div>
-    <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings">Practice &middot; 2s auto-check</button>
+    <div class="mode-toolbar">
+      <button class="mode-badge" id="mode-badge" type="button" aria-label="Open settings" hidden></button>
+      <label class="practice-switch" id="practice-switch-label">
+        <span>Practice <strong id="practice-switch-state">off</strong></span>
+        <input id="practice-switch" type="checkbox" role="switch" aria-label="Practice">
+      </label>
+    </div>
 
     <section class="display-area" aria-live="polite">
       <div id="pi-display" class="pi-display">
@@ -79,8 +85,8 @@
     <section class="stats">
       <div id="stat-correct-tile" role="button" tabindex="0" title="Click to view results" aria-label="Correct digits — click for results"><div class="stat-label">Correct</div><div class="stat-value" id="stat-correct">&mdash;</div></div>
       <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">&mdash;</div></div>
-      <div><div class="stat-label">Fixed</div><div class="stat-value" id="stat-fixed">&mdash;</div></div>
-      <div id="stat-missed-tile" role="button" tabindex="0" title="Click for help about Missed" aria-label="Missed digits — click for help"><div class="stat-label">Missed</div><div class="stat-value" id="stat-missed">&mdash;</div></div>
+      <div class="practice-stat concealed" aria-hidden="true"><div class="stat-label">Fixed</div><div class="stat-value" id="stat-fixed">&mdash;</div></div>
+      <div class="practice-stat concealed" aria-hidden="true" id="stat-missed-tile" role="button" tabindex="-1" title="Click for help about Missed" aria-label="Missed digits — click for help"><div class="stat-label">Missed</div><div class="stat-value" id="stat-missed">&mdash;</div></div>
       <div id="stat-skipped-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Skipped digits — click to skip ahead"><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">&mdash;</div></div>
     </section>
 
@@ -130,10 +136,11 @@
     </section>
 
     <section class="actions">
-      <button id="reset-btn" type="button">Reset</button>
+      <button id="reset-btn" type="button">Restart</button>
       <div class="actions-conditional">
+        <button id="new-attempt-btn" type="button" hidden>New attempt</button>
         <button id="stop-btn" type="button" hidden>Stop</button>
-        <button id="continue-btn" type="button" hidden>Continue in practice mode</button>
+        <button id="continue-btn" type="button" hidden>Continue in practice</button>
       </div>
       <span id="stat-time" class="stat-time" aria-label="Elapsed time">0:00</span>
     </section>
@@ -184,11 +191,11 @@
         <div class="setting">
           <div class="mode-selector" role="radiogroup" aria-label="Mode">
             <label class="mode-option">
-              <input type="radio" name="mode" value="practice" checked>
+              <input type="radio" name="mode" value="practice">
               <span>Practice</span>
             </label>
             <label class="mode-option">
-              <input type="radio" name="mode" value="hardcore">
+              <input type="radio" name="mode" value="hardcore" checked>
               <span>Hardcore</span>
             </label>
             <label class="mode-option">
@@ -234,11 +241,11 @@
           <div class="setting-label">Delayed checking</div>
           <div class="mode-selector" role="radiogroup" aria-label="Delayed checking">
             <label class="mode-option">
-              <input type="radio" name="delayed-checking" value="on" checked>
+              <input type="radio" name="delayed-checking" value="on">
               <span>On</span>
             </label>
             <label class="mode-option">
-              <input type="radio" name="delayed-checking" value="off">
+              <input type="radio" name="delayed-checking" value="off" checked>
               <span>Off</span>
             </label>
           </div>
@@ -460,6 +467,6 @@
   </div>
 
   <script src="sequences.js?v=9"></script>
-  <script src="script.js?v=9"></script>
+  <script src="script.js?v=10"></script>
 </body>
 </html>
