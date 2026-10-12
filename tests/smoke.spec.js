@@ -117,14 +117,14 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
 });
 
-test('flint hills: "30." prefix, and the 12th decimal ends the run', async ({ page }) => {
+test('flint hills: "30." prefix, and the 15th decimal ends the run', async ({ page }) => {
   await setSequence(page, 'flint-hills');
   await expect(page.locator('#prefix')).toHaveText('30.');
   // The leading "30" is absorbed by the prefix, like "3" for pi.
-  await page.keyboard.type('3031454615914');
+  await page.keyboard.type('303145461591433');
   await expect(page.locator('#stat-time')).not.toHaveClass(/frozen/);
-  await page.keyboard.type('3');
-  await expect(page.locator('#stat-correct')).toHaveText('12');
+  await page.keyboard.type('09');
+  await expect(page.locator('#stat-correct')).toHaveText('15');
   await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
   await expect(page.locator('#keypad-hint')).toHaveText('Complete — every digit correct!');
 });

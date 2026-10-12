@@ -1,7 +1,7 @@
 # Terms of the Flint Hills series, sum 1/(n^3 sin^2 n), at the n where sin n
 # is smallest: numerators p_k of the continued-fraction convergents of pi,
 # their multiples m*p_k, and the intermediate fractions p_{k-1} + j*p_k.
-# Prints their total per decade of n and beyond 1e14.
+# Prints their total per decade of n and beyond 1e16.
 #
 #   python3 structured_terms.py
 #   python3 structured_terms.py --basis P   # basis line for near_pi_sum.c
@@ -46,7 +46,7 @@ for i in range(1, len(P) - 1):
     ns.update(P[i - 1] + j * p for j in range(1, a[i] if i < len(a) else 0))
 ns = sorted(n for n in ns if 1 < n < LIMIT)
 
-cuts = [10 ** e for e in range(6, 15)]
+cuts = [10 ** e for e in range(6, 17)]
 bins = [D(0)] * (len(cuts) - 1)
 beyond = D(0)
 for n in ns:
@@ -57,4 +57,4 @@ for n in ns:
         if lo < n <= hi: bins[b] += t
 for b, (lo, hi) in enumerate(zip(cuts, cuts[1:])):
     print(f"(1e{len(str(lo)) - 1}, 1e{len(str(hi)) - 1}]: {float(bins[b]):.6e}")
-print(f"beyond 1e14: {beyond:.15E}")
+print(f"beyond 1e16: {beyond:.15E}")

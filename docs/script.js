@@ -166,7 +166,7 @@ const SEQUENCES = {
     digits: '',          // filled by setupChampernowne()
   },
   // Sum of the Flint Hills series, sum 1/(n^3 sin^2 n). Nobody has proved it
-  // converges, and there's no published table of digits: these 12 decimals
+  // converges, and there's no published table of digits: these 15 decimals
   // were computed for this app (scripts/flint-hills/README.md), so the run
   // ends after the last one like the other finite sequences.
   'flint-hills': {
@@ -177,9 +177,9 @@ const SEQUENCES = {
     integerPart: '30',
     alphabet: '0123456789',
     keypadType: 'decimal',
-    digits: '314546159143',
+    digits: '314546159143309',
     finite: true,
-    digitsHint: '12 digits available. The value is a computed estimate, and the series is not proven to converge.',
+    digitsNote: 'The value is a computed estimate, and the series is not proven to converge.',
   },
   'pi-binary': {
     label: 'π in binary',
@@ -934,8 +934,8 @@ function skipNextDigit() { skipDigits(1, 'fast'); }
 function updateSequenceDigitsHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
-  sequenceDigitsHintEl.textContent = def.digitsHint ||
-    `${def.digits.length.toLocaleString()} digits available`;
+  const count = `${def.digits.length.toLocaleString()} digits available`;
+  sequenceDigitsHintEl.textContent = def.digitsNote ? `${count}. ${def.digitsNote}` : count;
 }
 
 // Relabel the Mode chips for the current sequence (DOOM renames practice /
