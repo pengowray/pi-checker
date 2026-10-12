@@ -129,7 +129,7 @@ test('crossing numbers: no prefix, terms typed in order with auto-spaces', async
   await expect(page.locator('#user-digits .prime-space')).toHaveCount(10);
 });
 
-// Flint Hills is hidden from the dropdown for now (commented out in index.html).
+// Flint Hills is hidden from the dropdown for now (hidden: true in SEQUENCES).
 test.skip('flint hills: "30." prefix, and the 15th decimal ends the run', async ({ page }) => {
   await setSequence(page, 'flint-hills');
   await expect(page.locator('#prefix')).toHaveText('30.');

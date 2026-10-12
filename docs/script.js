@@ -34,6 +34,7 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: SHORT_PI,
+    long: true,
   },
   tau: {
     label: 'τ (tau = 2π)',
@@ -45,6 +46,50 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '', // derived from pi at load time and again when pi-long loads
   },
+  'pi-squared': {
+    label: 'π² (pi squared)',
+    shortLabel: 'π²',
+    hintLabel: 'pi squared',
+    titleHtml: '&pi;&sup2; Checker',
+    integerPart: '9',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+  },
+  zeta2: {
+    label: 'ζ(2) = π²/6',
+    shortLabel: 'ζ(2)',
+    hintLabel: 'zeta(2), the Basel constant (π²/6)',
+    titleHtml: '&zeta;(2) Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+  },
+  zeta3: {
+    label: 'ζ(3) (Apéry’s constant)',
+    shortLabel: 'ζ(3)',
+    hintLabel: 'zeta(3), Apéry’s constant',
+    titleHtml: '&zeta;(3) Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+  },
+  zeta5: {
+    label: 'ζ(5)',
+    shortLabel: 'ζ(5)',
+    hintLabel: 'zeta(5)',
+    titleHtml: '&zeta;(5) Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+  },
   phi: {
     label: 'φ (golden ratio)',
     shortLabel: 'φ',
@@ -54,6 +99,7 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',
+    long: true,
   },
   // Real root of x³ = x² + x + 1, the ratio that successive tribonacci
   // numbers (each the sum of the previous three) tend to.
@@ -66,36 +112,7 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',
-  },
-  sqrt2: {
-    label: '√2',
-    shortLabel: '√2',
-    hintLabel: 'the square root of 2',
-    titleHtml: '&radic;2 Checker',
-    integerPart: '1',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  sqrt3: {
-    label: '√3',
-    shortLabel: '√3',
-    hintLabel: 'the square root of 3',
-    titleHtml: '&radic;3 Checker',
-    integerPart: '1',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  sqrt5: {
-    label: '√5',
-    shortLabel: '√5',
-    hintLabel: 'the square root of 5',
-    titleHtml: '&radic;5 Checker',
-    integerPart: '2',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
+    long: true,
   },
   e: {
     label: 'e (Euler’s number)',
@@ -106,66 +123,7 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',
-  },
-  ln2: {
-    label: 'ln 2',
-    shortLabel: 'ln 2',
-    hintLabel: 'the natural log of 2',
-    titleHtml: 'ln 2 Checker',
-    integerPart: '0',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  log10_2: {
-    label: 'log₁₀ 2',
-    shortLabel: 'log₁₀ 2',
-    hintLabel: 'the base-10 log of 2',
-    titleHtml: 'log<sub>10</sub> 2 Checker',
-    integerPart: '0',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  'pi-squared': {
-    label: 'π² (pi squared)',
-    shortLabel: 'π²',
-    hintLabel: 'pi squared',
-    titleHtml: '&pi;&sup2; Checker',
-    integerPart: '9',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  zeta2: {
-    label: 'ζ(2) = π²/6',
-    shortLabel: 'ζ(2)',
-    hintLabel: 'zeta(2), the Basel constant (π²/6)',
-    titleHtml: '&zeta;(2) Checker',
-    integerPart: '1',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  zeta3: {
-    label: 'ζ(3) (Apéry’s constant)',
-    shortLabel: 'ζ(3)',
-    hintLabel: 'zeta(3), Apéry’s constant',
-    titleHtml: '&zeta;(3) Checker',
-    integerPart: '1',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
-  },
-  zeta5: {
-    label: 'ζ(5)',
-    shortLabel: 'ζ(5)',
-    hintLabel: 'zeta(5)',
-    titleHtml: '&zeta;(5) Checker',
-    integerPart: '1',
-    alphabet: '0123456789',
-    keypadType: 'decimal',
-    digits: '',
+    long: true,
   },
   'euler-mascheroni': {
     label: 'γ (Euler–Mascheroni)',
@@ -176,6 +134,7 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',
+    long: true,
   },
   catalan: {
     label: 'G (Catalan’s constant)',
@@ -186,35 +145,62 @@ const SEQUENCES = {
     alphabet: '0123456789',
     keypadType: 'decimal',
     digits: '',
+    long: true,
   },
-  champernowne: {
-    label: 'Champernowne’s constant',
-    shortLabel: 'Champernowne',
-    hintLabel: 'Champernowne’s constant (0.12345678910…)',
-    titleHtml: 'Champernowne Checker',
+  ln2: {
+    label: 'ln 2 (natural log)',
+    shortLabel: 'ln 2',
+    hintLabel: 'the natural log of 2',
+    titleHtml: 'ln 2 Checker',
     integerPart: '0',
     alphabet: '0123456789',
     keypadType: 'decimal',
-    digits: '',          // filled by setupChampernowne()
+    digits: '',
+    long: true,
   },
-  // Sum of the Flint Hills series, sum 1/(n^3 sin^2 n). An OpenAI preprint
-  // (September 2026, not yet peer reviewed) proves that pi's irrationality
-  // exponent is 2, which with Meiburg's theorem means the series converges.
-  // There's no published table of digits: these 15 decimals were computed for
-  // this app (scripts/flint-hills/README.md), so the run ends after the last
-  // one like the other finite sequences. Hidden from the dropdown in
-  // index.html for now.
-  'flint-hills': {
-    label: 'Flint Hills series',
-    shortLabel: 'Flint Hills',
-    hintLabel: 'the sum of the Flint Hills series',
-    titleHtml: 'Flint Hills Series Checker',
-    integerPart: '30',
+  log10_2: {
+    label: 'log₁₀ 2 (common log)',
+    shortLabel: 'log₁₀ 2',
+    hintLabel: 'the base-10 log of 2',
+    titleHtml: 'log<sub>10</sub> 2 Checker',
+    integerPart: '0',
     alphabet: '0123456789',
     keypadType: 'decimal',
-    digits: '314546159143309',
-    finite: true,
-    digitsNote: 'The digits were calculated for this app and are very likely correct. A 2026 proof that the series converges is not yet peer reviewed.',
+    digits: '',
+    long: true,
+  },
+  sqrt2: {
+    label: '√2',
+    shortLabel: '√2',
+    hintLabel: 'the square root of 2',
+    titleHtml: '&radic;2 Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+  },
+  sqrt3: {
+    label: '√3',
+    shortLabel: '√3',
+    hintLabel: 'the square root of 3',
+    titleHtml: '&radic;3 Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+  },
+  sqrt5: {
+    label: '√5',
+    shortLabel: '√5',
+    hintLabel: 'the square root of 5',
+    titleHtml: '&radic;5 Checker',
+    integerPart: '2',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
   },
   'pi-binary': {
     label: 'π in binary',
@@ -225,6 +211,7 @@ const SEQUENCES = {
     alphabet: '01',
     keypadType: 'decimal', // same 3x4 grid, 2-9 greyed out
     digits: '',
+    long: true,
   },
   'pi-hex': {
     label: 'π in hex',
@@ -235,6 +222,7 @@ const SEQUENCES = {
     alphabet: '0123456789ABCDEF',
     keypadType: 'hex',
     digits: '',
+    long: true,
   },
   primes: {
     label: 'Primes',
@@ -288,12 +276,41 @@ const SEQUENCES = {
     naturalSpaces: true,
     digitsNote: 'Terms larger than 315 were proven only in a 2026 paper that is not yet peer reviewed.',
   },
+  champernowne: {
+    label: 'Champernowne’s constant',
+    shortLabel: 'Champernowne',
+    hintLabel: 'Champernowne’s constant (0.12345678910…)',
+    titleHtml: 'Champernowne Checker',
+    integerPart: '0',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',          // filled by setupChampernowne()
+  },
+  // Sum of the Flint Hills series, sum 1/(n^3 sin^2 n). An OpenAI preprint
+  // (September 2026, not yet peer reviewed) proves that pi's irrationality
+  // exponent is 2, which with Meiburg's theorem means the series converges.
+  // There's no published table of digits: these 15 decimals were computed for
+  // this app (scripts/flint-hills/README.md), so the run ends after the last
+  // one like the other finite sequences.
+  'flint-hills': {
+    label: 'Flint Hills series',
+    shortLabel: 'Flint Hills',
+    hintLabel: 'the sum of the Flint Hills series',
+    titleHtml: 'Flint Hills Series Checker',
+    integerPart: '30',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '314546159143309',
+    hidden: true,    // left out of the dropdown for now
+    finite: true,
+    digitsNote: 'The digits were calculated for this app and are very likely correct. A 2026 proof that the series converges is not yet peer reviewed.',
+  },
   // ♥ Easter egg: any number that starts with "2." is less than 3, so every
   // digit you type is accepted as correct (see acceptAny in computeStatuses).
   // The "true" digits revealed by Skip are all 9s — 2.999… is the value that
   // creeps up on 3 without ever quite reaching it.
   'less-than-3': {
-    label: '< 3',
+    label: '<3 (less than 3)',
     shortLabel: '< 3',
     hintLabel: 'a number less than 3',
     titleHtml: '&lt;3 Checker',
@@ -365,13 +382,9 @@ const SEQUENCES = {
   },
 };
 
-// Pull in the bundled secondary sequences (short fallbacks)
-if (window.SEQUENCE_DATA) {
-  for (const key of ['phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'tribonacci', 'euler-mascheroni', 'catalan', 'pi-binary', 'pi-hex']) {
-    if (window.SEQUENCE_DATA[key]) {
-      SEQUENCES[key].digits = window.SEQUENCE_DATA[key].digits;
-    }
-  }
+// Short fallback digits from sequences.js, shown until docs/long/<id>.js loads.
+for (const [id, data] of Object.entries(window.SEQUENCE_DATA || {})) {
+  if (SEQUENCES[id]) SEQUENCES[id].digits = data.digits;
 }
 
 // ---- Derived sequences ----
@@ -643,6 +656,10 @@ const piDisplayEl = document.getElementById('pi-display');
 const prefixEl = document.getElementById('prefix');
 const appTitleEl = document.getElementById('app-title');
 const sequenceSelect = document.getElementById('sequence');
+// The dropdown lists the sequences in SEQUENCES order, except hidden ones.
+for (const [id, def] of Object.entries(SEQUENCES)) {
+  if (!def.hidden) sequenceSelect.add(new Option(def.label, id));
+}
 const sequenceDigitsHintEl = document.getElementById('sequence-digits-hint');
 const autoSecondsInput = document.getElementById('auto-seconds');
 const autoSecondsLabel = document.getElementById('auto-seconds-label');
@@ -1085,8 +1102,8 @@ function sequenceFromHash() {
   let id = '';
   try { id = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim(); }
   catch (e) { id = (location.hash || '').replace(/^#/, '').trim(); }
-  // Only sequences listed in the dropdown, so a hidden one (commented out of
-  // index.html) can't be opened by URL with a blank dropdown.
+  // Only sequences listed in the dropdown, so a hidden one can't be opened by
+  // URL with a blank dropdown.
   const listed = Array.from(sequenceSelect.options).some(o => o.value === id);
   return SEQUENCES[id] && listed ? id : null;
 }
@@ -3757,22 +3774,16 @@ if (correctTile) {
 }
 
 // ---- Async load of long sequence data ----
-// Each sequence with a reliable longer source has its own file in
-// docs/long/<id>.js. The files set window.LONG_DIGITS[id] (kept lazy so
+// Each sequence marked long: true has its own file in docs/long/<id>.js. The files set window.LONG_DIGITS[id] (kept lazy so
 // only the picked sequence pays the bytes). Triggered eagerly for pi (so
 // the perf test and a typical first-load user both get the long version
 // quickly) and on demand whenever the user picks a different sequence.
-const LONG_AVAILABLE = new Set([
-  'pi', 'phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2',
-  'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'tribonacci', 'euler-mascheroni', 'catalan',
-  'pi-binary', 'pi-hex',
-]);
 const longLoadPromises = new Map();
 
 function loadLong(id) {
   // Tau is derived from pi; loading pi covers both.
   if (id === 'tau') id = 'pi';
-  if (!LONG_AVAILABLE.has(id)) return Promise.resolve(false);
+  if (!SEQUENCES[id] || !SEQUENCES[id].long) return Promise.resolve(false);
   if (longLoadPromises.has(id)) return longLoadPromises.get(id);
   const p = new Promise((resolve) => {
     const script = document.createElement('script');
