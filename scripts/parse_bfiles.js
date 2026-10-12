@@ -1,9 +1,11 @@
-// Parse OEIS b-files in $LOCALAPPDATA/Temp and emit:
+// Parse OEIS b-files and emit:
 //   1. docs/long/<key>.js — full b-file digit string under window.LONG_DIGITS
 //   2. console preview of each digit string
 //
-// Run from the repo root after downloading the b-files:
-//   node scripts/parse_bfiles.js
+// Run from the repo root after downloading the b-files (named as in SOURCES
+// below) into one directory:
+//   node scripts/parse_bfiles.js <dir>
+// Without <dir> it reads from $LOCALAPPDATA/Temp. Missing b-files are skipped.
 //
 // Sources are referenced in each generated file's banner comment.
 const fs = require('fs');
@@ -11,7 +13,7 @@ const path = require('path');
 
 const tmp = path.join(process.env.LOCALAPPDATA || process.env.TEMP || '/tmp', 'Temp');
 // On git-bash /tmp maps to %LOCALAPPDATA%\Temp; fall back if needed
-const tmpDir = fs.existsSync(tmp) ? tmp : (process.env.TEMP || '/tmp');
+const tmpDir = process.argv[2] || (fs.existsSync(tmp) ? tmp : (process.env.TEMP || '/tmp'));
 
 const SOURCES = [
   { id: 'A002193', file: 'sqrt2.txt',     strip: 1, key: 'sqrt2',     outKey: 'sqrt2',     label: '√2',       integer: '1',  base: 10 },
@@ -24,6 +26,7 @@ const SOURCES = [
   { id: 'A002388', file: 'pi_sq.txt',     strip: 1, key: 'pi_sq',     outKey: 'pi-squared', label: 'π²',       integer: '9',  base: 10 },
   { id: 'A001620', file: 'euler_mascheroni.txt', strip: 0, key: 'euler_mascheroni', outKey: 'euler-mascheroni', label: 'γ (Euler–Mascheroni)', integer: '0', base: 10 },
   { id: 'A013661', file: 'zeta2.txt',     strip: 1, key: 'zeta2',     outKey: 'zeta2',     label: 'ζ(2) = π²/6', integer: '1', base: 10 },
+  { id: 'A002117', file: 'zeta3.txt',     strip: 1, key: 'zeta3',     outKey: 'zeta3',     label: 'ζ(3) (Apéry’s constant)', integer: '1', base: 10 },
   { id: 'A004601', file: 'pi_binary.txt', strip: 2, key: 'pi_binary', outKey: 'pi-binary', label: 'π in binary', integer: '11', base: 2  },
   // A062964 stores each hex digit as a decimal int 0-15; map to 0-9A-F.
   { id: 'A062964', file: 'pi_hex.txt',    strip: 1, key: 'pi_hex',    outKey: 'pi-hex',    label: 'π in hex', integer: '3',  base: 16 },

@@ -50,7 +50,7 @@ test('loads with pi by default', async ({ page }) => {
 test('sequence dropdown lists every supported sequence', async ({ page }) => {
   const values = await page.$$eval('#sequence option', els => els.map(e => e.value));
   expect(values).toEqual([
-    'pi', 'tau', 'pi-squared', 'zeta2', 'phi', 'e', 'euler-mascheroni',
+    'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
     'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
     'less-than-3', 'moss', 'doom',
