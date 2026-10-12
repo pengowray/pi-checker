@@ -52,7 +52,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
   expect(values).toEqual([
     'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
-    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
+    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne', 'flint-hills',
     'less-than-3', 'moss', 'doom',
   ]);
 });
@@ -115,6 +115,18 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await page.keyboard.type('3'); // the final 3, now at position 21 → ends it
   await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
+});
+
+test('flint hills: "30." prefix, and the 12th decimal ends the run', async ({ page }) => {
+  await setSequence(page, 'flint-hills');
+  await expect(page.locator('#prefix')).toHaveText('30.');
+  // The leading "30" is absorbed by the prefix, like "3" for pi.
+  await page.keyboard.type('3031454615914');
+  await expect(page.locator('#stat-time')).not.toHaveClass(/frozen/);
+  await page.keyboard.type('3');
+  await expect(page.locator('#stat-correct')).toHaveText('12');
+  await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
+  await expect(page.locator('#keypad-hint')).toHaveText('Complete — every digit correct!');
 });
 
 test('doom: a determined value scores immediately; a still-growable one waits', async ({ page }) => {
