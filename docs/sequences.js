@@ -19,7 +19,7 @@
 //   pi-binary: https://oeis.org/A004601/b004601.txt
 //   pi-hex: https://oeis.org/A062964/b062964.txt
 // Champernowne's constant (0.12345678910111213…) is generated at runtime
-// in script.js since it's just concatenated positive integers.
+// in sequence-defs.js since it's just concatenated positive integers.
 
 window.SEQUENCE_DATA = {
   phi: {
