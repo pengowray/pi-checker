@@ -52,7 +52,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
   expect(values).toEqual([
     'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'phi', 'e', 'euler-mascheroni',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
-    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne', 'flint-hills',
+    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
     'less-than-3', 'moss', 'doom',
   ]);
 });
@@ -117,7 +117,8 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
 });
 
-test('flint hills: "30." prefix, and the 15th decimal ends the run', async ({ page }) => {
+// Flint Hills is hidden from the dropdown for now (commented out in index.html).
+test.skip('flint hills: "30." prefix, and the 15th decimal ends the run', async ({ page }) => {
   await setSequence(page, 'flint-hills');
   await expect(page.locator('#prefix')).toHaveText('30.');
   // The leading "30" is absorbed by the prefix, like "3" for pi.

@@ -1017,7 +1017,10 @@ function sequenceFromHash() {
   let id = '';
   try { id = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim(); }
   catch (e) { id = (location.hash || '').replace(/^#/, '').trim(); }
-  return SEQUENCES[id] ? id : null;
+  // Only sequences listed in the dropdown, so a hidden one (commented out of
+  // index.html) can't be opened by URL with a blank dropdown.
+  const listed = Array.from(sequenceSelect.options).some(o => o.value === id);
+  return SEQUENCES[id] && listed ? id : null;
 }
 
 function updateSequenceHash(id) {
