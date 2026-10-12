@@ -4,8 +4,22 @@ The app's `flint-hills` sequence is 30.314546159143309, the first 15 decimals of
 
     S = sum over n >= 1 of 1 / (n^3 sin^2 n)
 
-Nobody has proved that this series converges. These digits are its value if it
-does. They come from the scripts in this folder, not from a published table.
+The digits come from the scripts in this folder, not from a published table.
+
+## Convergence
+
+Whether the series converges was open until September 2026, when an OpenAI
+preprint, [The irrationality exponent of π is 2](https://github.com/openai/math/blob/main/preprints/The-irrationality-exponent-of-pi-is-2-September-24-2026/paper.pdf),
+proved that for every ν > 2, |π − p/q| ≥ q^−ν once q is large enough.
+Meiburg had already shown that the series converges if π's irrationality
+exponent is below 5/2, so the preprint gives convergence as a corollary.
+
+- The exponent theorem has a Lean proof in the same repository
+  (`lean/docs/017.md`). The Flint Hills corollary is outside that Lean proof.
+  As of October 2026 neither has been peer reviewed.
+- The preprint says its "large enough" threshold is not effective: it proves
+  one exists without giving a value. So it can't bound the tail of the series,
+  and the digits below are certain from the computation, not proven.
 
 ## Result
 

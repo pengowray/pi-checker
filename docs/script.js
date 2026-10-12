@@ -185,10 +185,13 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '',          // filled by setupChampernowne()
   },
-  // Sum of the Flint Hills series, sum 1/(n^3 sin^2 n). Nobody has proved it
-  // converges, and there's no published table of digits: these 15 decimals
-  // were computed for this app (scripts/flint-hills/README.md), so the run
-  // ends after the last one like the other finite sequences.
+  // Sum of the Flint Hills series, sum 1/(n^3 sin^2 n). An OpenAI preprint
+  // (September 2026, not yet peer reviewed) proves that pi's irrationality
+  // exponent is 2, which with Meiburg's theorem means the series converges.
+  // There's no published table of digits: these 15 decimals were computed for
+  // this app (scripts/flint-hills/README.md), so the run ends after the last
+  // one like the other finite sequences. Hidden from the dropdown in
+  // index.html for now.
   'flint-hills': {
     label: 'Flint Hills series',
     shortLabel: 'Flint Hills',
@@ -199,7 +202,7 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '314546159143309',
     finite: true,
-    digitsNote: 'The value is a computed estimate, and the series is not proven to converge.',
+    digitsNote: 'The digits were calculated for this app and are very likely correct. A 2026 proof that the series converges is not yet peer reviewed.',
   },
   'pi-binary': {
     label: 'π in binary',
