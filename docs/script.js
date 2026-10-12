@@ -274,7 +274,7 @@ const SEQUENCES = {
     digits: '',          // filled by setupCrossingNumbers()
     spaceBoundaries: null,
     naturalSpaces: true,
-    digitsNote: 'Terms larger than 315 were proven only in a 2026 paper that is not yet peer reviewed.',
+    digitsNote: 'Term n is the fewest crossings in any drawing of n points with every pair joined by a curve.',
   },
   champernowne: {
     label: 'Champernowne’s constant',
