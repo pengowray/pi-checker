@@ -13,7 +13,7 @@
 //   euler-mascheroni: https://oeis.org/A001620/b001620.txt
 //   zeta2: https://oeis.org/A013661/b013661.txt
 //   zeta3: https://oeis.org/A002117/b002117.txt
-//   zeta5: computed by scripts/zeta5.py (OEIS A013663 lists ~100 digits)
+//   zeta5: computed by scripts/build_digits.py (OEIS A013663 lists ~100 digits)
 //   catalan: https://oeis.org/A006752/b006752.txt
 //   tribonacci: https://oeis.org/A058265/b058265.txt
 //   pi-binary: https://oeis.org/A004601/b004601.txt
