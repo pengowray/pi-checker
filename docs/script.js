@@ -55,6 +55,18 @@ const SEQUENCES = {
     keypadType: 'decimal',
     digits: '',
   },
+  // Real root of x³ = x² + x + 1, the ratio that successive tribonacci
+  // numbers (each the sum of the previous three) tend to.
+  tribonacci: {
+    label: 'Tribonacci constant',
+    shortLabel: 'tribonacci',
+    hintLabel: 'the tribonacci constant',
+    titleHtml: 'Tribonacci Checker',
+    integerPart: '1',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',
+  },
   sqrt2: {
     label: '√2',
     shortLabel: '√2',
@@ -257,6 +269,25 @@ const SEQUENCES = {
     naturalSpaces: true,
     commaIsSpace: true,
   },
+  // cr(Kₙ) for n = 1, 2, 3, …: the fewest crossings in a plane drawing of
+  // the complete graph on n points (OEIS A000241). Hill's formula, proved for
+  // every n in a 2026 OpenAI preprint with a Lean proof; before that only
+  // n <= 14 was proven (n = 13, 14 by Aichholzer, 2021). Typed like primes:
+  // spaces between terms auto-insert.
+  'crossing-numbers': {
+    label: 'Crossing numbers of complete graphs',
+    shortLabel: 'crossing numbers',
+    hintLabel: 'the list of crossing numbers of complete graphs',
+    titleHtml: 'Graph Crossing Numbers',
+    integerPart: '',
+    prefix: '',
+    alphabet: '0123456789',
+    keypadType: 'decimal',
+    digits: '',          // filled by setupCrossingNumbers()
+    spaceBoundaries: null,
+    naturalSpaces: true,
+    digitsNote: 'Terms larger than 315 were proven only in a 2026 paper that is not yet peer reviewed.',
+  },
   // ♥ Easter egg: any number that starts with "2." is less than 3, so every
   // digit you type is accepted as correct (see acceptAny in computeStatuses).
   // The "true" digits revealed by Skip are all 9s — 2.999… is the value that
@@ -336,7 +367,7 @@ const SEQUENCES = {
 
 // Pull in the bundled secondary sequences (short fallbacks)
 if (window.SEQUENCE_DATA) {
-  for (const key of ['phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'euler-mascheroni', 'catalan', 'pi-binary', 'pi-hex']) {
+  for (const key of ['phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'tribonacci', 'euler-mascheroni', 'catalan', 'pi-binary', 'pi-hex']) {
     if (window.SEQUENCE_DATA[key]) {
       SEQUENCES[key].digits = window.SEQUENCE_DATA[key].digits;
     }
@@ -390,6 +421,20 @@ deriveTau();
   SEQUENCES.primes.digits = joined;
   SEQUENCES.primes.spaceBoundaries = boundaries;
   SEQUENCES['primes-spaced'].digits = primes.slice(1).join(' ');
+})();
+
+(function setupCrossingNumbers() {
+  // Hill's formula, cr(Kₙ) = ¼⌊n/2⌋⌊(n−1)/2⌋⌊(n−2)/2⌋⌊(n−3)/2⌋. Exact in
+  // doubles: at n = 2000 the product is about 1e12.
+  const half = (k) => Math.floor(k / 2);
+  const boundaries = new Set();
+  let joined = '';
+  for (let n = 1; n <= 2000; n++) {
+    joined += String(half(n) * half(n - 1) * half(n - 2) * half(n - 3) / 4);
+    boundaries.add(joined.length);
+  }
+  SEQUENCES['crossing-numbers'].digits = joined;
+  SEQUENCES['crossing-numbers'].spaceBoundaries = boundaries;
 })();
 
 (function setupChampernowne() {
@@ -3719,7 +3764,7 @@ if (correctTile) {
 // quickly) and on demand whenever the user picks a different sequence.
 const LONG_AVAILABLE = new Set([
   'pi', 'phi', 'sqrt2', 'sqrt3', 'sqrt5', 'e', 'ln2', 'log10_2',
-  'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'euler-mascheroni', 'catalan',
+  'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'tribonacci', 'euler-mascheroni', 'catalan',
   'pi-binary', 'pi-hex',
 ]);
 const longLoadPromises = new Map();

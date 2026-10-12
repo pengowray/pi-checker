@@ -50,9 +50,10 @@ test('loads with pi by default', async ({ page }) => {
 test('sequence dropdown lists every supported sequence', async ({ page }) => {
   const values = await page.$$eval('#sequence option', els => els.map(e => e.value));
   expect(values).toEqual([
-    'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'phi', 'e', 'euler-mascheroni', 'catalan',
+    'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'phi', 'tribonacci', 'e',
+    'euler-mascheroni', 'catalan',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
-    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'champernowne',
+    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'crossing-numbers', 'champernowne',
     'less-than-3', 'moss', 'doom',
   ]);
 });
@@ -115,6 +116,17 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await page.keyboard.type('3'); // the final 3, now at position 21 → ends it
   await expect(page.locator('#stat-time')).toHaveClass(/frozen/);
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
+});
+
+test('crossing numbers: no prefix, terms typed in order with auto-spaces', async ({ page }) => {
+  await setSequence(page, 'crossing-numbers');
+  await expect(page.locator('#prefix')).toBeHidden();
+  // 0 0 0 0 1 3 9 18 36 60 → 13 digits, a space after each completed term.
+  await page.keyboard.type('0000139183660');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('13');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  await expect(page.locator('#user-digits .prime-space')).toHaveCount(10);
 });
 
 // Flint Hills is hidden from the dropdown for now (commented out in index.html).

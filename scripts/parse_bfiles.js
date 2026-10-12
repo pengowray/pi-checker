@@ -28,6 +28,7 @@ const SOURCES = [
   { id: 'A013661', file: 'zeta2.txt',     strip: 1, key: 'zeta2',     outKey: 'zeta2',     label: 'ζ(2) = π²/6', integer: '1', base: 10 },
   { id: 'A002117', file: 'zeta3.txt',     strip: 1, key: 'zeta3',     outKey: 'zeta3',     label: 'ζ(3) (Apéry’s constant)', integer: '1', base: 10 },
   { id: 'A006752', file: 'catalan.txt',   strip: 0, key: 'catalan',   outKey: 'catalan',   label: 'Catalan’s constant G', integer: '0', base: 10 },
+  { id: 'A058265', file: 'tribonacci.txt', strip: 1, key: 'tribonacci', outKey: 'tribonacci', label: 'the tribonacci constant', integer: '1', base: 10 },
   { id: 'A004601', file: 'pi_binary.txt', strip: 2, key: 'pi_binary', outKey: 'pi-binary', label: 'π in binary', integer: '11', base: 2  },
   // A062964 stores each hex digit as a decimal int 0-15; map to 0-9A-F.
   { id: 'A062964', file: 'pi_hex.txt',    strip: 1, key: 'pi_hex',    outKey: 'pi-hex',    label: 'π in hex', integer: '3',  base: 16 },
