@@ -1309,7 +1309,8 @@ html.code-seq #allow-manual-setting {
    shows a comma separator key (DOOM), add a full-width separator row below
    the standard 3x4 grid. */
 .keypad-decimal.with-space,
-.keypad-decimal.with-comma {
+.keypad-decimal.with-comma,
+.keypad-decimal.with-t {
   grid-template-areas:
     "k1 k2 k3"
     "k4 k5 k6"
@@ -1318,7 +1319,8 @@ html.code-seq #allow-manual-setting {
     "ksp ksp ksp";
 }
 .keypad-decimal.with-space.flipped,
-.keypad-decimal.with-comma.flipped {
+.keypad-decimal.with-comma.flipped,
+.keypad-decimal.with-t.flipped {
   grid-template-areas:
     "k7 k8 k9"
     "k4 k5 k6"
@@ -1327,11 +1329,14 @@ html.code-seq #allow-manual-setting {
     "ksp ksp ksp";
 }
 
-/* Both separator keys occupy the same row slot; only the active one shows. */
+/* The separator keys and the T key occupy the same row slot; only the
+   active one shows. */
 .keypad [data-digit=" "],
-.keypad [data-digit=","] { grid-area: ksp; }
+.keypad [data-digit=","],
+.keypad [data-digit="T"] { grid-area: ksp; }
 .keypad-decimal:not(.with-space) [data-digit=" "] { display: none; }
 .keypad-decimal:not(.with-comma) [data-digit=","] { display: none; }
+.keypad-decimal:not(.with-t) [data-digit="T"] { display: none; }
 
 /* Jameco JE600-style hex keypad: A-F across the top, decimal digits in
    a 3-column phone layout below them with the trailing hex digits filling

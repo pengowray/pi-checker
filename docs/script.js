@@ -170,15 +170,16 @@ for (const [id, def] of Object.entries(SEQUENCES)) {
 }
 const piBaseSetting = document.getElementById('pi-base-setting');
 const piBaseSelect = document.getElementById('pi-base');
-const PI_BASE_NAMES = { 3: 'ternary', 8: 'octal', 12: 'duodecimal' };
-for (const b of PI_BASES) {
-  const text = PI_BASE_NAMES[b] ? b + ' (' + PI_BASE_NAMES[b] + ')' : String(b);
-  piBaseSelect.add(new Option(text, 'pi-base' + b));
+for (const group of PI_BASE_PICKER) {
+  const optgroup = document.createElement('optgroup');
+  optgroup.label = group.label;
+  for (const id of group.ids) optgroup.appendChild(new Option(SEQUENCES[id].pickerLabel, id));
+  piBaseSelect.appendChild(optgroup);
 }
 
 // The dropdown value that shows a sequence (the shared entry for pi-base).
 function dropdownValueFor(id) {
-  return SEQUENCES[id] && SEQUENCES[id].piBase ? PI_BASE_OPTION : id;
+  return SEQUENCES[id] && SEQUENCES[id].inPicker ? PI_BASE_OPTION : id;
 }
 const sequenceDigitsHintEl = document.getElementById('sequence-digits-hint');
 const autoSecondsInput = document.getElementById('auto-seconds');
@@ -557,8 +558,9 @@ function updateSequenceDigitsHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
   const count = `${def.digits.length.toLocaleString()} digits available`;
-  const note = def.piBase
-    ? `Calculated from the first ${def.sourceLen.toLocaleString()} decimal digits of π.`
+  const note = def.radix
+    ? [`Calculated from the first ${def.sourceLen.toLocaleString()} decimal digits of π.`, def.digitsNote]
+      .filter(Boolean).join(' ')
     : def.digitsNote;
   sequenceDigitsHintEl.textContent = note ? `${count}. ${note}` : count;
 }
@@ -578,7 +580,7 @@ function applyModeLabels(def) {
 function applySequence(id) {
   const def = SEQUENCES[id];
   if (!def) return;
-  derivePiBase(id);
+  derivePiRadix(id);
   state.sequenceId = id;
   state.digits = def.digits;
   state.integerPart = def.integerPart;
@@ -588,6 +590,7 @@ function applySequence(id) {
   // Comma/space interchangeable separators (DOOM, primes-spaced): a typed
   // comma is recorded as the canonical space.
   state.commaIsSpace = !!def.commaIsSpace;
+  state.charAliases = def.charAliases || null;
   state.integerCharsConsumed = 0;
   // prefixHtml (e.g. DOOM's C declaration line) renders as HTML; otherwise the
   // prefix/integer part is plain text.
@@ -622,14 +625,16 @@ function applySequence(id) {
   // sequences (DOOM), otherwise the space key when the alphabet uses spaces.
   keypadDecimal.classList.toggle('with-comma', !!def.commaKey);
   keypadDecimal.classList.toggle('with-space', def.alphabet.includes(' ') && !def.commaKey);
+  // A T key (−1) for balanced ternary, in the same row.
+  keypadDecimal.classList.toggle('with-t', !!def.tKey);
   // Faint phone-keypad letters (ABC/DEF…) for sequences that opt in.
   keypadDecimal.classList.toggle('phone-letters', !!def.phoneLetters);
   // Keep the settings dropdown in sync — browsers restore form values
   // across reloads, so without this the select can show a stale
   // sequence when the app actually re-initialised back to the default.
   if (sequenceSelect.value !== dropdownValueFor(id)) sequenceSelect.value = dropdownValueFor(id);
-  piBaseSetting.hidden = !def.piBase;
-  if (def.piBase) piBaseSelect.value = id;
+  piBaseSetting.hidden = !def.inPicker;
+  if (def.inPicker) piBaseSelect.value = id;
   updateSequenceDigitsHint();
   updateMobileInputMode();
   // Fire-and-forget: fetch the long version if we have a source for it.
@@ -651,7 +656,7 @@ function sequenceFromHash() {
   // Only sequences listed in the dropdown (or picked with the base picker), so
   // a hidden one can't be opened by URL with a blank dropdown.
   const listed = Array.from(sequenceSelect.options).some(o => o.value === id);
-  return SEQUENCES[id] && (listed || SEQUENCES[id].piBase) ? id : null;
+  return SEQUENCES[id] && (listed || SEQUENCES[id].inPicker) ? id : null;
 }
 
 function updateSequenceHash(id) {
@@ -675,7 +680,7 @@ function changeSequence(newId, { fromHash = false } = {}) {
     if (!ok) {
       // Put the control that triggered this back to the current sequence.
       sequenceSelect.value = dropdownValueFor(state.sequenceId);
-      if (SEQUENCES[state.sequenceId].piBase) piBaseSelect.value = state.sequenceId;
+      if (SEQUENCES[state.sequenceId].inPicker) piBaseSelect.value = state.sequenceId;
       if (fromHash) updateSequenceHash(state.sequenceId);
       return false;
     }
@@ -1458,11 +1463,19 @@ function celebrateComplete() {
 }
 
 // ---- Input handling ----
+// The character a typed one is recorded as: a comma becomes the separating
+// space where they're interchangeable (DOOM, primes-spaced), and per-sequence
+// aliases apply (a minus sign is T in balanced ternary). Expects upper case.
+function canonicalChar(c) {
+  if (state.commaIsSpace && c === ',') return ' ';
+  if (state.charAliases && state.charAliases[c]) return state.charAliases[c];
+  return c;
+}
+
 function inputDigit(d) {
   if (isInputLocked()) return;
   d = d.toUpperCase();
-  // Comma/space interchangeable: a typed comma becomes the canonical space.
-  if (state.commaIsSpace && d === ',') d = ' ';
+  d = canonicalChar(d);
   if (!state.alphabet.includes(d)) return;
 
   // Silently absorb leading integer-part chars (e.g. user types "3" first
@@ -1545,7 +1558,8 @@ function inputPaste(text) {
   let prevChar = state.entries.length > 0
     ? state.entries[state.entries.length - 1].char
     : ' ';
-  for (const c of upper) {
+  for (let c of upper) {
+    c = canonicalChar(c);
     if (!state.alphabet.includes(c)) continue;
     if (c === ' ' && prevChar === ' ') continue;
     digits.push(c);
@@ -3091,7 +3105,7 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  const k = e.key.toUpperCase();
+  const k = canonicalChar(e.key.toUpperCase());
   if (k.length === 1 && state.alphabet.includes(k)) {
     inputDigit(k);
     e.preventDefault();
@@ -3504,7 +3518,7 @@ const longLoadPromises = new Map();
 
 function loadLong(id) {
   // Tau and π in other bases are derived from pi; loading pi covers them.
-  if (id === 'tau' || (SEQUENCES[id] && SEQUENCES[id].piBase)) id = 'pi';
+  if (id === 'tau' || (SEQUENCES[id] && SEQUENCES[id].radix)) id = 'pi';
   if (!SEQUENCES[id] || !SEQUENCES[id].long) return Promise.resolve(false);
   if (longLoadPromises.has(id)) return longLoadPromises.get(id);
   const p = new Promise((resolve) => {
@@ -3521,9 +3535,9 @@ function loadLong(id) {
         // loaded), swap in the longer string and re-score any entries
         // beyond the short fallback.
         const active = state.sequenceId;
-        if (id === 'pi') derivePiBase(active);
+        if (id === 'pi') derivePiRadix(active);
         const isActive = active === id ||
-          (id === 'pi' && (active === 'tau' || !!SEQUENCES[active].piBase));
+          (id === 'pi' && (active === 'tau' || !!SEQUENCES[active].radix));
         if (isActive) {
           state.digits = SEQUENCES[active].digits;
           computeStatuses();

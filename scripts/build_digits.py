@@ -46,9 +46,6 @@ SOURCES = [
     dict(key='tribonacci', label='the tribonacci constant', kind='oeis', id='A058265', lead='1'),
     dict(key='euler-mascheroni', label='γ (Euler–Mascheroni)', kind='oeis', id='A001620', lead=''),
     dict(key='catalan', label='Catalan’s constant G', kind='oeis', id='A006752', lead=''),
-    dict(key='pi-binary', label='π in binary', kind='oeis', id='A004601', lead='11', base=2),
-    # A062964 stores each hex digit as a decimal number 0-15; mapped to 0-9A-F.
-    dict(key='pi-hex', label='π in hex', kind='oeis', id='A062964', lead='3', base=16),
 ]
 
 

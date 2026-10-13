@@ -37,7 +37,7 @@
   </script>
   <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
        stale script.css/js for up to 10 min after a push. -->
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <header>
@@ -112,6 +112,8 @@
       <!-- Comma separator key, shown instead of the space key for comma-style
            code sequences (DOOM). Emits "," which is recorded as a space. -->
       <button class="key key-comma" data-digit="," aria-label="Comma">,</button>
+      <!-- T key (minus one), shown for balanced ternary. -->
+      <button class="key key-t" data-digit="T" aria-label="T, minus one">T</button>
     </section>
 
     <section class="keypad keypad-hex" id="keypad-hex" role="group" aria-label="Hex keypad" hidden>
@@ -454,8 +456,9 @@
     </div>
   </div>
 
-  <script src="sequences.js?v=12"></script>
-  <script src="sequence-defs.js?v=2"></script>
-  <script src="script.js?v=23"></script>
+  <script src="sequences.js?v=13"></script>
+  <script src="radix.js?v=1"></script>
+  <script src="sequence-defs.js?v=3"></script>
+  <script src="script.js?v=24"></script>
 </body>
 </html>

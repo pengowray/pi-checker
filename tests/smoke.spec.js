@@ -1204,12 +1204,48 @@ test('π in another base opens from the URL, and base 16 goes to π in hex', asy
 test('π in another base gets more digits once the long π loads', async ({ page }) => {
   await page.goto('/#pi-base3');
   await expect.poll(() => page.evaluate(() => state.digits.length)).toBeGreaterThan(40000);
-  // Spot-check against the stored hex digits: the same conversion in base 16.
-  const ok = await page.evaluate(() => {
-    const hex = piDigitsInBase(16);
-    return hex.length > 16000 && hex.startsWith('243F6A8885A308D313198A2E03707344');
-  });
-  expect(ok).toBe(true);
+  // Binary and hex are converted the same way, from all 100,000 decimals.
+  await page.goto('/#pi-binary');
+  await expect.poll(() => page.evaluate(() => state.digits.length)).toBeGreaterThan(330000);
+  await page.goto('/#pi-hex');
+  await expect.poll(() => page.evaluate(() => state.digits.length)).toBeGreaterThan(83000);
+  expect(await page.evaluate(() => state.digits.slice(0, 32))).toBe('243F6A8885A308D313198A2E03707344');
+});
+
+test('negative bases, balanced ternary, φ and √2 in the base picker', async ({ page }) => {
+  // Switching sequences by URL with digits typed asks to confirm.
+  page.on('dialog', d => d.accept());
+  await page.goto('/#pi-base-neg10');
+  // π = 4.9596134676… in base −10: 4 − 0.9 + 0.05 − 0.009 + …
+  await expect(page.locator('#prefix')).toHaveText('4.');
+  await expect(page.locator('#pi-base')).toHaveValue('pi-base-neg10');
+  await page.keyboard.type('49596134676');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('10');
+
+  await page.goto('/#pi-balanced-ternary');
+  await expect(page.locator('#prefix')).toHaveText('10.');
+  await expect(page.locator('.key-t')).toBeVisible();
+  await expect(page.locator('#keypad-decimal .key[data-digit="2"]')).toBeDisabled();
+  // π = 10.011T111T… ; a minus sign is read as T.
+  await page.keyboard.type('10011-111');
+  await page.locator('.key-t').click();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('8');
+  await expect(page.locator('#user-digits')).toContainText('011T111T');
+
+  await page.goto('/#pi-base-phi');
+  await expect(page.locator('#prefix')).toHaveText('100.');
+  await page.keyboard.type('0100101010010001');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('16');
+  expect(await page.evaluate(() => state.digits.includes('11'))).toBe(false);
+
+  await page.goto('/#pi-base-sqrt2');
+  await expect(page.locator('#prefix')).toHaveText('1000.');
+  await page.keyboard.type('00010001');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('8');
 });
 
 test('list hints: digit of the whole list, then digit of the term once lengths differ', async ({ page }) => {

@@ -211,8 +211,8 @@ const SEQUENCES = {
     integerPart: '11',
     alphabet: '01',
     keypadType: 'decimal', // same 3x4 grid, 2-9 greyed out
-    digits: '',
-    long: true,
+    digits: '',          // converted from pi's decimals (derivePiRadix)
+    radix: { kind: 'base', base: 2 },
   },
   'pi-hex': {
     label: 'π in hex',
@@ -222,8 +222,8 @@ const SEQUENCES = {
     integerPart: '3',
     alphabet: '0123456789ABCDEF',
     keypadType: 'hex',
-    digits: '',
-    long: true,
+    digits: '',          // converted from pi's decimals (derivePiRadix)
+    radix: { kind: 'base', base: 16 },
   },
   primes: {
     label: 'Primes',
@@ -395,49 +395,113 @@ const SEQUENCES = {
 };
 
 // ---- π in other bases ----
-// Bases 3 to 15 except 10 (binary, decimal and hex have their own entries).
-// Their digits are converted in the browser from the decimal digits of π
-// (derivePiBase), so they grow when long/pi.js loads. The ids pi-base3 …
-// pi-base15 stay out of the dropdown, which has a single "another base" entry
-// plus a base picker (see script.js).
-const PI_BASES = [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15];
-// Decimal digits used for the conversion: enough for 17,000 to 42,000 digits
-// in these bases, while the BigInt work stays fast in every browser.
-const PI_BASE_SOURCE_DIGITS = 20000;
-for (const b of PI_BASES) {
-  SEQUENCES['pi-base' + b] = {
-    label: 'π in base ' + b,
-    shortLabel: 'π in base ' + b,
-    hintLabel: 'pi in base ' + b,
-    titleHtml: '&pi; in base ' + b,
-    integerPart: (3).toString(b),
-    alphabet: '0123456789ABCDEF'.slice(0, b),
-    keypadType: b <= 10 ? 'decimal' : 'hex', // unused keys greyed out
-    digits: '',
-    hidden: true,
-    piBase: b,
-  };
+// π in binary, in hex, and in the number systems offered by the base picker
+// are converted in the browser from the decimal digits of π (radix.js), so
+// they grow when long/pi.js loads. The picker's sequences (inPicker) stay out
+// of the dropdown, which has a single "another base" entry instead.
+//
+// Decimal digits used for the conversions: all 100,000 that long/pi.js has.
+const PI_RADIX_SOURCE_DIGITS = 100000;
+// Base φ and base √2 cost a full-precision multiplication per digit, so they
+// stop at this many digits (about 0.1 s of work).
+const PI_BETA_DIGITS = 10000;
+
+// The picker's groups and options, in order.
+const PI_BASE_PICKER = [];
+const RADIX_NAMES = { 3: 'ternary', 8: 'octal', 12: 'duodecimal', [-2]: 'negabinary', [-3]: 'negaternary', [-10]: 'negadecimal' };
+
+function addPiRadix(group, id, def) {
+  group.ids.push(id);
+  SEQUENCES[id] = Object.assign({ digits: '', hidden: true, inPicker: true }, def);
 }
 
-// The digits of π after the point in base b. n decimal digits pin π down to
-// within 10^-n, which fixes about n·log(10)/log(b) base-b digits; the last 8
-// of those are dropped as a margin against rounding.
-function piDigitsInBase(b) {
-  const dec = SEQUENCES.pi.digits.slice(0, PI_BASE_SOURCE_DIGITS);
-  const n = dec.length;
-  const count = Math.floor(n * Math.LN10 / Math.log(b)) - 8;
-  const scaled = BigInt(dec) * BigInt(b) ** BigInt(count) / 10n ** BigInt(n);
-  return scaled.toString(b).toUpperCase().padStart(count, '0');
+{
+  const whole = { label: 'Whole-number bases', ids: [] };
+  for (const b of [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15]) {
+    addPiRadix(whole, 'pi-base' + b, {
+      label: 'π in base ' + b,
+      pickerLabel: RADIX_NAMES[b] ? b + ' (' + RADIX_NAMES[b] + ')' : String(b),
+      shortLabel: 'π in base ' + b,
+      hintLabel: 'pi in base ' + b,
+      titleHtml: '&pi; in base ' + b,
+      integerPart: (3).toString(b),
+      alphabet: RADIX_CHARS.slice(0, b),
+      keypadType: b <= 10 ? 'decimal' : 'hex', // unused keys greyed out
+      radix: { kind: 'base', base: b },
+    });
+  }
+  const negative = { label: 'Negative bases', ids: [] };
+  for (let b = 2; b <= 10; b++) {
+    addPiRadix(negative, 'pi-base-neg' + b, {
+      label: 'π in base −' + b,
+      pickerLabel: '−' + b + (RADIX_NAMES[-b] ? ' (' + RADIX_NAMES[-b] + ')' : ''),
+      shortLabel: 'π in base −' + b,
+      hintLabel: 'pi in base −' + b,
+      titleHtml: '&pi; in base &minus;' + b,
+      integerPart: integerInNegativeBase(Math.floor(Math.PI + b / (b + 1)), b),
+      alphabet: RADIX_CHARS.slice(0, b),
+      keypadType: 'decimal',
+      radix: { kind: 'negative', base: b },
+      digitsNote: 'Place values alternate between positive and negative, so no minus sign is needed.',
+    });
+  }
+  const other = { label: 'Other number systems', ids: [] };
+  addPiRadix(other, 'pi-balanced-ternary', {
+    label: 'π in balanced ternary',
+    pickerLabel: 'Balanced ternary',
+    shortLabel: 'π in balanced ternary',
+    hintLabel: 'pi in balanced ternary',
+    titleHtml: '&pi; in balanced ternary',
+    integerPart: '10',
+    alphabet: 'T01',
+    // T stands for −1; a typed minus sign is read as T.
+    charAliases: { '-': 'T', '−': 'T' },
+    tKey: true,
+    keypadType: 'decimal',
+    radix: { kind: 'balanced-ternary' },
+    digitsNote: 'T stands for −1.',
+  });
+  addPiRadix(other, 'pi-base-phi', {
+    label: 'π in base φ',
+    pickerLabel: 'φ (golden ratio)',
+    shortLabel: 'π in base φ',
+    hintLabel: 'pi in base phi',
+    titleHtml: '&pi; in base &phi;',
+    integerPart: '100',
+    alphabet: '01',
+    keypadType: 'decimal',
+    radix: { kind: 'beta', beta: 'phi' },
+    digitsNote: 'Standard form, with no two 1s in a row.',
+  });
+  addPiRadix(other, 'pi-base-sqrt2', {
+    label: 'π in base √2',
+    pickerLabel: '√2',
+    shortLabel: 'π in base √2',
+    hintLabel: 'pi in base √2',
+    titleHtml: '&pi; in base &radic;2',
+    integerPart: '1000',
+    alphabet: '01',
+    keypadType: 'decimal',
+    radix: { kind: 'beta', beta: 'sqrt2' },
+    digitsNote: 'Greedy expansion: each digit is 1 if that keeps the total at or below π. Other expansions are valid too.',
+  });
+  PI_BASE_PICKER.push(whole, negative, other);
 }
 
-// Fill in (or refresh, after more pi digits load) a pi-base sequence's digits.
-function derivePiBase(id) {
+// Fill in (or refresh, after more pi digits load) a converted sequence.
+function derivePiRadix(id) {
   const def = SEQUENCES[id];
-  if (!def || !def.piBase) return;
-  const sourceLen = Math.min(SEQUENCES.pi.digits.length, PI_BASE_SOURCE_DIGITS);
-  if (def.sourceLen === sourceLen) return;
-  def.digits = piDigitsInBase(def.piBase);
-  def.sourceLen = sourceLen;
+  if (!def || !def.radix) return;
+  const decimals = SEQUENCES.pi.digits.slice(0, PI_RADIX_SOURCE_DIGITS);
+  if (def.sourceLen === decimals.length) return;
+  const r = def.radix;
+  const out = r.kind === 'base' ? piInBase(decimals, r.base)
+    : r.kind === 'negative' ? piInNegativeBase(decimals, r.base)
+    : r.kind === 'balanced-ternary' ? piInBalancedTernary(decimals)
+    : piInBetaBase(decimals, r.beta, PI_BETA_DIGITS);
+  def.integerPart = out.integerPart;
+  def.digits = out.digits;
+  def.sourceLen = decimals.length;
 }
 
 // Short fallback digits from sequences.js, shown until docs/long/<id>.js loads.
