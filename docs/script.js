@@ -2543,23 +2543,25 @@ function render() {
       insertNode(el, groupIdxFor(piPos));
       node = el;
     }
-    function ellipsisCell() {
+    // hidden: how many digits (from digit 1) the "…" stands for.
+    function ellipsisCell(hidden) {
       const el = document.createElement('span');
       el.className = 'digit skip-ellipsis';
       el.textContent = '0'; // sized like a digit; the "…" is drawn over it
-      el.title = 'Digits 1 to ' + start.toLocaleString() + ' are not shown';
+      el.title = 'Digits 1 to ' + hidden.toLocaleString() + ' are not shown';
       return el;
     }
     let p = start;
     if (start > 0 && def.naturalSpaces) {
-      const el = ellipsisCell();
+      const el = ellipsisCell(start);
       place(el, pos++);
       const sp = document.createElement('span');
       sp.className = 'prime-space';
       sp.textContent = ' ';
       place(sp, pos - 1);
     } else if (start > 0) {
-      const el = ellipsisCell();
+      // The "…" takes the place of the digit at start.
+      const el = ellipsisCell(start + 1);
       cells.push(el);
       place(el, pos++);
       p++;
