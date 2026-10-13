@@ -1198,6 +1198,7 @@ test('π in another base opens from the URL, and base 16 goes to π in hex', asy
   await expect(page.locator('#pi-base')).toHaveValue('pi-base12');
   await page.goto('/#pi-base16');
   await expect(page.locator('#sequence')).toHaveValue('pi-hex');
+  await expect(page).toHaveURL(/#pi-hex$/);
 });
 
 test('π in another base gets more digits once the long π loads', async ({ page }) => {
@@ -1247,4 +1248,6 @@ test('doom hint: C-style value names, and digit of value after octal', async ({ 
   await expect(hint).toHaveText('Enter rndtable[4], 1st digit:');
   await page.keyboard.type('22');
   await expect(hint).toHaveText('Enter rndtable[4], 3rd digit:');
+  await page.locator('#reset-btn').click();
+  await expect(hint).toHaveText('Enter digit 1 (in rndtable[0]):');
 });
