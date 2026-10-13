@@ -436,15 +436,27 @@ function nextPiIdx() {
     : 0;
 }
 
+// Sprint and hardcore allow skipping only before the first typed digit.
+// (DOOM's value skipping doesn't follow this rule; see canSkip.)
+function skipClosedForRun() {
+  const def = SEQUENCES[state.sequenceId];
+  if (def && def.bytes) return false;
+  return (state.mode === 'sprint' || state.mode === 'hardcore') && state.startTime !== null;
+}
+
 function canSkip() {
   if (isInputLocked()) return false;
   const def = SEQUENCES[state.sequenceId];
   // Byte-level sequences (DOOM) skip whole values, not characters.
   if (def && def.bytes) return (state.nextSeqIdx || 0) < def.bytes.length;
   if (nextPiIdx() >= state.digits.length) return false;
-  if ((state.mode === 'sprint' || state.mode === 'hardcore') && state.startTime !== null) return false;
+  if (skipClosedForRun()) return false;
   return true;
 }
+
+// Shown when the Skipped tile or the V key is used after skipping has closed.
+const SKIP_CLOSED_TEXT = 'Turn on Practice to skip digits after you start.';
+const SKIP_OPEN_TITLE = 'Click to skip digits';
 
 // Reveal the next n byte values (DOOM): drop any partial value, then fill each
 // value's decimal form as skipped entries (plus a committing separator). They
@@ -2364,6 +2376,16 @@ function updateStatTiles(s) {
   statMissed.textContent = zeroDash(s.missed);
   statSkipped.textContent = zeroDash(s.skipped);
   statFixed.textContent = zeroDash(s.fixed);
+  // Once a sprint or hardcore run starts, skipping is closed: the Skipped tile
+  // hides, or, if digits were skipped before the start, keeps its count with a
+  // lock and explains how to skip again when clicked.
+  const closed = skipClosedForRun();
+  const hidden = closed && !s.skipped;
+  skippedTile.classList.toggle('concealed', hidden);
+  skippedTile.classList.toggle('skip-closed', closed && !!s.skipped);
+  skippedTile.setAttribute('aria-hidden', String(hidden));
+  skippedTile.tabIndex = hidden ? -1 : 0;
+  skippedTile.title = closed ? SKIP_CLOSED_TEXT : SKIP_OPEN_TITLE;
   // Doubles as a key for the dotted underline on corrected digits.
   // Hardcore and sprint don't allow the backspace-then-retype path
   // so they'll never have fixed > 0; bullet and practice will.
@@ -2898,7 +2920,8 @@ document.addEventListener('keydown', (e) => {
   // "V" skips the next sequence digit. Practice: any time;
   // Sprint/Hardcore: only before the clock starts.
   if (e.key === 'v' || e.key === 'V') {
-    skipNextDigit();
+    if (skipClosedForRun()) showToast(SKIP_CLOSED_TEXT);
+    else skipNextDigit();
     e.preventDefault();
     return;
   }
@@ -3148,9 +3171,30 @@ settingsModal.addEventListener('click', (e) => {
   if (e.target && e.target.hasAttribute('data-close')) closeSettings();
 });
 
+// ---- Toast ----
+// A short message at the bottom of the screen that fades after a few seconds.
+const toastEl = document.getElementById('toast');
+let toastTimer = null;
+function showToast(text, ms = 3500) {
+  toastEl.textContent = text;
+  toastEl.hidden = false;
+  // Restart the fade-in when a toast is already showing.
+  toastEl.classList.remove('show');
+  void toastEl.offsetWidth;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toastEl.classList.remove('show');
+    toastTimer = setTimeout(() => { toastEl.hidden = true; }, 250);
+  }, ms);
+}
+
 // ---- Skip-digits modal ----
 function openSkipModal() {
-  if (!canSkip()) return;
+  if (!canSkip()) {
+    if (skipClosedForRun()) showToast(SKIP_CLOSED_TEXT);
+    return;
+  }
   skipCountInput.value = lastSkipAmount;
   syncSkipConfirmLabel();
   skipModal.hidden = false;

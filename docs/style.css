@@ -237,16 +237,52 @@ main {
 [data-theme="dark"] .practice-switch input:checked { background: #94a3b8; }
 .practice-switch input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
-.practice-stat {
-  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms;
+.practice-stat,
+#stat-skipped-tile {
+  transition: opacity 220ms ease, transform 220ms ease, visibility 220ms,
+    background 0.1s, border-color 0.1s;
 }
-.practice-stat.concealed { opacity: 0; visibility: hidden; transform: translateY(-5px); }
+.practice-stat.concealed,
+#stat-skipped-tile.concealed { opacity: 0; visibility: hidden; transform: translateY(-5px); }
 :root[data-motion="low"] .practice-stat,
-:root[data-motion="zen"] .practice-stat { transform: none; transition: opacity 150ms ease, visibility 150ms; }
+:root[data-motion="zen"] .practice-stat,
+:root[data-motion="low"] #stat-skipped-tile,
+:root[data-motion="zen"] #stat-skipped-tile { transform: none; transition: opacity 150ms ease, visibility 150ms; }
+/* Skipping closed after the run started; the count stays, with a lock. */
+#stat-skipped-tile.skip-closed { cursor: default; }
+#stat-skipped-tile.skip-closed:hover { background: var(--surface); border-color: var(--border); }
+#stat-skipped-tile.skip-closed .stat-label::before {
+  content: "\1F512\FE0E";
+  margin-right: 0.25em;
+  font-size: 0.9em;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 6px);
+  max-width: calc(100vw - 2rem);
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 0.9rem;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  opacity: 0;
+  transition: opacity 200ms ease, transform 200ms ease;
+  z-index: 300;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+:root[data-motion="low"] .toast,
+:root[data-motion="zen"] .toast { transform: translate(-50%, 0); transition: opacity 150ms ease; }
 :root[data-motion="low"] .practice-switch input::before,
 :root[data-motion="zen"] .practice-switch input::before { transition: none; }
 @media (prefers-reduced-motion: reduce) {
-  .practice-stat { transform: none !important; transition: opacity 150ms ease, visibility 150ms; }
+  .practice-stat,
+  #stat-skipped-tile { transform: none !important; transition: opacity 150ms ease, visibility 150ms; }
+  .toast { transform: translate(-50%, 0) !important; }
   .practice-switch input::before { transition: none; }
 }
 
@@ -993,6 +1029,9 @@ html.code-seq #allow-manual-setting {
 #stat-missed-tile,
 #stat-correct-tile {
   cursor: pointer;
+}
+#stat-missed-tile,
+#stat-correct-tile {
   transition: background 0.1s, border-color 0.1s;
 }
 #stat-skipped-tile:hover,

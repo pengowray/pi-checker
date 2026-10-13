@@ -96,3 +96,30 @@ test('practice clock leaves out time the page spent suspended', async ({ page })
   await page.waitForTimeout(400);
   await expect(page.locator('#stat-time')).toContainText('0:0');
 });
+
+test('Skipped tile hides once an attempt starts without skips', async ({ page }) => {
+  const tile = page.locator('#stat-skipped-tile');
+  await expect(tile).toBeVisible();
+  await page.keyboard.type('1');
+  await expect(tile).toBeHidden();
+  // V can't skip now; it explains why instead.
+  await page.keyboard.press('v');
+  await expect(page.locator('#toast')).toBeVisible();
+  await expect(page.locator('#stat-correct')).toHaveText('1');
+  await page.locator('#practice-switch').check();
+  await expect(tile).toBeVisible();
+});
+
+test('Skipped tile keeps a locked count when skips came before the start', async ({ page }) => {
+  const tile = page.locator('#stat-skipped-tile');
+  await page.keyboard.press('v');
+  await page.keyboard.press('v');
+  await expect(page.locator('#stat-skipped')).toHaveText('2');
+  await page.keyboard.type('4');
+  await expect(tile).toBeVisible();
+  await expect(tile).toHaveClass(/skip-closed/);
+  await tile.click();
+  await expect(page.locator('#skip-modal')).toBeHidden();
+  await expect(page.locator('#toast')).toBeVisible();
+  await expect(page.locator('#toast')).toHaveText(await tile.getAttribute('title'));
+});

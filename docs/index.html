@@ -37,7 +37,7 @@
   </script>
   <!-- ?v= cache-buster: bump on every deploy so the CDN/browser can't serve a
        stale script.css/js for up to 10 min after a push. -->
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <header>
@@ -87,7 +87,7 @@
       <div><div class="stat-label">Wrong</div><div class="stat-value" id="stat-wrong">&mdash;</div></div>
       <div class="practice-stat concealed" aria-hidden="true"><div class="stat-label">Fixed</div><div class="stat-value" id="stat-fixed">&mdash;</div></div>
       <div class="practice-stat concealed" aria-hidden="true" id="stat-missed-tile" role="button" tabindex="-1" title="Click for help about Missed" aria-label="Missed digits — click for help"><div class="stat-label">Missed</div><div class="stat-value" id="stat-missed">&mdash;</div></div>
-      <div id="stat-skipped-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Skipped digits — click to skip ahead"><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">&mdash;</div></div>
+      <div id="stat-skipped-tile" role="button" tabindex="0" title="Click to skip digits" aria-label="Skipped digits"><div class="stat-label">Skipped</div><div class="stat-value" id="stat-skipped">&mdash;</div></div>
     </section>
 
     <div class="keypad-hint" id="keypad-hint">Enter digit 1 of &pi;:</div>
@@ -145,6 +145,8 @@
       <span id="stat-time" class="stat-time" aria-label="Elapsed time">0:00</span>
     </section>
   </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <button id="zen-exit" type="button" aria-label="Exit zen mode" title="Exit zen mode (Esc)">&#x2715;</button>
 
@@ -449,6 +451,6 @@
 
   <script src="sequences.js?v=12"></script>
   <script src="sequence-defs.js?v=1"></script>
-  <script src="script.js?v=19"></script>
+  <script src="script.js?v=20"></script>
 </body>
 </html>
