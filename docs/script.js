@@ -2507,7 +2507,29 @@ function getModeRemaining(elapsed) {
   return null;
 }
 
+// performance.now() stops counting while a phone is asleep or the browser has
+// suspended the page, so on return the run clock would carry on from where it
+// stopped. Outside practice the clock should count that time too: compare the
+// wall clock with performance.now() at each tick and move startTime back by
+// the difference. Practice keeps the old behaviour (time away isn't counted).
+let lastClockSample = { perf: performance.now(), wall: Date.now() }; // at the previous tick
+function catchUpSuspendedTime() {
+  const perf = performance.now();
+  const wall = Date.now();
+  if (state.startTime !== null &&
+      state.mode !== 'practice' && !isInputLocked()) {
+    const lostMs = (wall - lastClockSample.wall) - (perf - lastClockSample.perf);
+    // Ignore small drift between the two clocks.
+    if (lostMs > 1000) state.startTime -= lostMs;
+  }
+  lastClockSample = { perf, wall };
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') tickTime();
+});
+
 function tickTime() {
+  catchUpSuspendedTime();
   if (state.startTime === null) {
     if (showCompTimerInline()) {
       const remaining = getModeRemaining(0);

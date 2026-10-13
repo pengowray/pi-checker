@@ -70,3 +70,29 @@ test('saved delayed checking remains opt-in and reduced motion removes the stat 
   await expect(page.locator('input[name="delayed-checking"][value="on"]')).toBeChecked();
   await expect(page.locator('#auto-delay-setting')).toBeVisible();
 });
+
+// performance.now() stops while a phone sleeps; outside practice the run
+// clock still counts that time. Simulate a 2-minute suspend by moving
+// Date.now() forward without performance.now() advancing.
+async function simulateSuspend(page, ms) {
+  await page.evaluate((ms) => {
+    const realNow = Date.now.bind(Date);
+    Date.now = () => realNow() + ms;
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, ms);
+}
+
+test('attempt clock counts time the page spent suspended', async ({ page }) => {
+  await page.keyboard.type('14');
+  await simulateSuspend(page, 120_000);
+  await expect(page.locator('#stat-time')).toContainText('2:0');
+});
+
+test('practice clock leaves out time the page spent suspended', async ({ page }) => {
+  await page.locator('#practice-switch').check();
+  await page.locator('#practice-switch').evaluate(el => el.blur());
+  await page.keyboard.type('14');
+  await simulateSuspend(page, 120_000);
+  await page.waitForTimeout(400);
+  await expect(page.locator('#stat-time')).toContainText('0:0');
+});
