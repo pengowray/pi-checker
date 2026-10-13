@@ -225,6 +225,28 @@ const SEQUENCES = {
     digits: '',          // converted from pi's decimals (derivePiRadix)
     radix: { kind: 'base', base: 16 },
   },
+  // π = 3 + 1/(7 + 1/(15 + 1/(1 + …))), written [3; 7, 15, 1, …]: OEIS
+  // A001203. Typed like primes-spaced, with a comma or space after each term
+  // (shown as a comma); the 3 (term a₀) is given.
+  'pi-cf': {
+    label: 'π as a continued fraction',
+    shortLabel: 'π as a continued fraction',
+    hintLabel: 'the continued fraction of pi',
+    titleHtml: '&pi; Continued Fraction',
+    integerPart: '3 ',
+    prefix: '[3;\u00a0', // NBSP, so the trailing space renders
+    alphabet: '0123456789 ,',
+    keypadType: 'decimal',
+    digits: '',
+    long: true,
+    naturalSpaces: true,
+    commaIsSpace: true,
+    commaKey: true,
+    commaList: true,
+    firstTerm: 1,
+    termRef: (i) => 'term a' + String(i).replace(/\d/g, (c) => '₀₁₂₃₄₅₆₇₈₉'[c]),
+    digitsNote: 'π = [a₀; a₁, a₂, …] = a₀ + 1/(a₁ + 1/(a₂ + …)), with a₀ = 3.',
+  },
   primes: {
     label: 'Primes',
     shortLabel: 'primes',

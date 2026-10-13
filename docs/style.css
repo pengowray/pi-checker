@@ -770,6 +770,12 @@ input[type="range"]:disabled {
 .digit.space-char {
   min-width: 0.45em;
 }
+/* Lists written with commas ([3; 7, 15, 1, …]) show each typed separator as
+   a comma followed by the space. */
+.pi-display.comma-list .digit.space-char::before {
+  content: ",\a0";
+  color: var(--muted);
+}
 
 /* ---- DOOM rndtable: C-source code styling ------------------------------
    The display mimics the array's C source — a coloured declaration header,

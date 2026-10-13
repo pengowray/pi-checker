@@ -608,6 +608,7 @@ function applySequence(id) {
   // Code-source styling (DOOM): aligned columns + C-like colours. Clear the
   // run-complete flag (the }; line) — a fresh sequence is never pre-finished.
   piDisplayEl.classList.toggle('code-mode', !!def.codeColumns);
+  piDisplayEl.classList.toggle('comma-list', !!def.commaList);
   piDisplayEl.classList.remove('run-complete');
   // Some sequences (DOOM) offer only a subset of modes and rename them. Fall
   // back to practice if the current mode isn't available, relabel the chips,

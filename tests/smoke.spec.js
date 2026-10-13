@@ -53,7 +53,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
     'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'phi', 'tribonacci', 'e',
     'euler-mascheroni', 'catalan',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
-    'pi-binary', 'pi-hex', 'pi-base', 'primes', 'primes-spaced', 'crossing-numbers', 'champernowne',
+    'pi-binary', 'pi-hex', 'pi-base', 'pi-cf', 'primes', 'primes-spaced', 'crossing-numbers', 'champernowne',
     'less-than-3', 'moss', 'doom',
   ]);
 });
@@ -1286,4 +1286,20 @@ test('doom hint: C-style value names, and digit of value after octal', async ({ 
   await expect(hint).toHaveText('Enter rndtable[4], 3rd digit:');
   await page.locator('#reset-btn').click();
   await expect(hint).toHaveText('Enter digit 1 (in rndtable[0]):');
+});
+
+test('π as a continued fraction: terms with commas, named a₁, a₂, …', async ({ page }) => {
+  const hint = page.locator('#keypad-hint');
+  await setSequence(page, 'pi-cf');
+  await expect(page.locator('#prefix')).toHaveText('[3;\u00a0');
+  await expect(page.locator('.key-comma')).toBeVisible();
+  await expect(hint).toHaveText('Enter digit 1 (in term a₁):');
+  // "3, " is absorbed by the prefix, like "2 " for primes-spaced.
+  await page.keyboard.type('3, 7, 15, 1, 29');
+  await expect(hint).toHaveText('Enter digit 7 (in term a₄):');
+  await page.keyboard.type('2');
+  await expect(hint).toHaveText('Enter a comma after term a₄:');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+  await expect.poll(() => page.evaluate(() => state.digits.split(' ').length)).toBe(19999);
 });
