@@ -123,3 +123,25 @@ test('Skipped tile keeps a locked count when skips came before the start', async
   await expect(page.locator('#toast')).toBeVisible();
   await expect(page.locator('#toast')).toHaveText(await tile.getAttribute('title'));
 });
+
+test('bullet and DOOM Nightmare close skipping once the run starts', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await page.locator('.mode-option:has(input[value="bullet"])').click();
+  await page.locator('#settings-close').click();
+  await page.keyboard.press('v');
+  await expect(page.locator('#stat-skipped')).toHaveText('1');
+  await page.keyboard.type('4');
+  await page.keyboard.press('v');
+  await expect(page.locator('#stat-skipped')).toHaveText('1');
+  await expect(page.locator('#toast')).toContainText('Switch to Practice mode');
+
+  page.once('dialog', d => d.accept());
+  await page.locator('#settings-toggle').click();
+  await page.locator('#sequence').selectOption('doom');
+  await page.locator('.mode-option:has(input[value="hardcore"])').click();
+  await page.locator('#settings-close').click();
+  await page.keyboard.type('0,');
+  await page.keyboard.press('v');
+  await expect(page.locator('#toast')).toContainText('Can’t skip values');
+  await expect(page.locator('#stat-skipped-tile')).toBeHidden();
+});

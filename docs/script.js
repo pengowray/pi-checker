@@ -444,37 +444,37 @@ allowManualInputs.forEach(input => {
 });
 
 // ---- Skip next digit(s) ----
-// Practice: works any time. Sprint/Hardcore: only before the clock starts.
+// Practice: works any time. Other modes: only before the first typed digit.
 function nextPiIdx() {
   return state.entries.length > 0
     ? state.entries[state.entries.length - 1].seqIdxAfter
     : 0;
 }
 
-// Sprint and hardcore allow skipping only before the first typed digit.
-// (DOOM's value skipping doesn't follow this rule; see canSkip.)
+// Every mode except practice allows skipping only before the first typed digit.
 function skipClosedForRun() {
-  const def = SEQUENCES[state.sequenceId];
-  if (def && def.bytes) return false;
-  return (state.mode === 'sprint' || state.mode === 'hardcore') && state.startTime !== null;
+  return state.mode !== 'practice' && state.startTime !== null;
 }
 
 function canSkip() {
   if (isInputLocked()) return false;
+  if (skipClosedForRun()) return false;
   const def = SEQUENCES[state.sequenceId];
   // Byte-level sequences (DOOM) skip whole values, not characters.
   if (def && def.bytes) return (state.nextSeqIdx || 0) < def.bytes.length;
   if (nextPiIdx() >= state.digits.length) return false;
-  if (skipClosedForRun()) return false;
   return true;
 }
 
 // Shown when the Skipped tile or the V key is used after skipping has closed.
-// Hardcore has the Practice switch on screen; sprint changes mode in Settings.
+// Hardcore has the Practice switch on screen; sprint and bullet change mode
+// in Settings. DOOM skips whole values.
 function skipClosedText() {
+  const def = SEQUENCES[state.sequenceId];
+  const what = def && def.bytes ? 'values' : 'digits';
   return state.mode === 'hardcore'
-    ? 'Can’t skip digits after you start typing. Turn on Practice to skip.'
-    : 'Can’t skip digits after you start typing. Switch to Practice mode to skip.';
+    ? 'Can’t skip ' + what + ' after you start typing. Turn on Practice to skip.'
+    : 'Can’t skip ' + what + ' after you start typing. Switch to Practice mode to skip.';
 }
 const SKIP_OPEN_TITLE = 'Click to skip digits. Press V to skip one digit.';
 
@@ -483,7 +483,7 @@ const SKIP_OPEN_TITLE = 'Click to skip digits. Press V to skip one digit.';
 // score as "skipped" and read grey, like a revealed value elsewhere.
 function skipDoomValues(n) {
   const def = SEQUENCES[state.sequenceId];
-  if (!def || !def.bytes || isInputLocked()) return 0;
+  if (!def || !def.bytes || !canSkip()) return 0;
   // Drop the partial (uncommitted) trailing value so we fill clean values.
   while (state.entries.length > 0 &&
          state.entries[state.entries.length - 1].char !== ' ') {
@@ -3069,7 +3069,7 @@ document.addEventListener('keydown', (e) => {
   }
 
   // "V" skips the next sequence digit. Practice: any time;
-  // Sprint/Hardcore: only before the clock starts.
+  // Other modes: only before the first typed digit.
   if (e.key === 'v' || e.key === 'V') {
     if (skipClosedForRun()) showToast(skipClosedText());
     else skipNextDigit();
