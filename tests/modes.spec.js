@@ -145,3 +145,59 @@ test('bullet and DOOM Nightmare close skipping once the run starts', async ({ pa
   await expect(page.locator('#toast')).toContainText('Can’t skip values');
   await expect(page.locator('#stat-skipped-tile')).toBeHidden();
 });
+
+test('skipping ahead before the start moves the starting point', async ({ page }) => {
+  await page.goto('/#pi-binary');
+  await expect.poll(() => page.evaluate(() => state.digits.length)).toBeGreaterThan(330000);
+  await page.locator('#stat-skipped-tile').click();
+  await page.locator('#skip-count').fill('300000');
+  await expect(page.locator('#skip-result')).toHaveText('After skipping: digit 300,001 of 332,184');
+  await page.locator('#skip-confirm').click();
+  await expect(page.locator('#stat-skipped')).toHaveText('300000');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 300,001 of pi in binary:');
+  // About 2,000 digits of context, starting with "…", not 300,000 entries.
+  expect(await page.evaluate(() => state.entries.length)).toBe(0);
+  await expect(page.locator('#user-digits .skip-ellipsis')).toHaveCount(1);
+  const shown = await page.locator('#user-digits .digit').count();
+  expect(shown).toBeGreaterThan(1900);
+  expect(shown).toBeLessThan(2200);
+  // The context starts at a multiple of the line length, so columns line up
+  // with a run from digit 1.
+  const aligned = await page.evaluate(() =>
+    skipContext.lineLength > 0 && (state.seqOffset - skipContext.len) % skipContext.lineLength === 0);
+  expect(aligned).toBe(true);
+  const next = await page.evaluate(() => SEQUENCES['pi-binary'].digits.slice(300000, 300008));
+  await page.keyboard.type(next);
+  await expect(page.locator('#stat-correct')).toHaveText('8');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 300,009 of pi in binary:');
+  // Restart goes back to digit 1.
+  await page.locator('#reset-btn').click();
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of pi in binary:');
+  await expect(page.locator('#user-digits .skip-ellipsis')).toHaveCount(0);
+});
+
+test('backspace before the start takes back a skipped digit in practice', async ({ page }) => {
+  await page.locator('#practice-switch').check();
+  await page.locator('#practice-switch').evaluate(el => el.blur());
+  await page.keyboard.press('v');
+  await page.keyboard.press('v');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 3 of pi:');
+  await page.keyboard.press('Backspace');
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 2 of pi:');
+  await expect(page.locator('#stat-skipped')).toHaveText('1');
+  // "3" isn't absorbed as the integer part after a skip: digit 2 is 4.
+  await page.keyboard.type('4');
+  await expect(page.locator('#stat-correct')).toHaveText('1');
+});
+
+test('skipping ahead in a spaced list lands on the next whole term', async ({ page }) => {
+  await page.goto('/#primes-spaced');
+  // "3 5 7" then the space: a 6-character skip ends on a space, so it also
+  // skips that space and the next thing to type is 11.
+  await page.locator('#stat-skipped-tile').click();
+  await page.locator('#skip-count').fill('5');
+  await page.locator('#skip-confirm').click();
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 4 (in the 5th prime):');
+  await page.keyboard.type('11 13');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});

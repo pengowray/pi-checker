@@ -75,6 +75,11 @@ const state = {
   acceptAny: !!SEQUENCES.pi.acceptAny, // <3 mode: every typed digit counts as correct
   commaIsSpace: !!SEQUENCES.pi.commaIsSpace, // typed comma recorded as a space
   integerCharsConsumed: 0, // how many leading integer-part chars the user has typed
+  // Skipping ahead before the first typed digit moves the starting point
+  // instead of adding skipped entries: state.digits is the sequence from
+  // seqOffset on, so entry positions stay relative to it (see skipAhead).
+  seqOffset: 0,
+  skipAheadFade: null, // { from, at }: positions revealed by the last skip, to fade in
   mode: 'hardcore',
   autoCheckSeconds: 0,
   practiceDelay: DEFAULT_PRACTICE_DELAY, // remember user's choice for practice mode
@@ -220,6 +225,7 @@ const skipModal = document.getElementById('skip-modal');
 const skipConfirmBtn = document.getElementById('skip-confirm');
 const skipConfirmCountEl = document.getElementById('skip-confirm-count');
 const skipCountInput = document.getElementById('skip-count');
+const skipResultEl = document.getElementById('skip-result');
 const skipPresetBtns = document.querySelectorAll('.skip-preset');
 const missedTile = document.getElementById('stat-missed-tile');
 const missedModal = document.getElementById('missed-modal');
@@ -522,10 +528,50 @@ function skipDoomValues(n) {
   return count;
 }
 
+// The sequence from the current starting point on.
+function syncStateDigits() {
+  const def = SEQUENCES[state.sequenceId];
+  state.digits = state.seqOffset ? def.digits.slice(state.seqOffset) : def.digits;
+}
+
+// Absolute position (0-based) in the sequence of the next digit to type.
+function absoluteNextIdx() {
+  return state.seqOffset + (state.nextSeqIdx || 0);
+}
+
+// Skipping before anything is typed moves the starting point, so a skip of
+// 300,000 binary digits doesn't create 300,000 entries. The display then
+// shows "…" and the digits just before the new start (see renderSkipContext).
+// Finite sequences keep skipped entries, so skipping to the end still
+// completes the run.
+function canSkipAhead() {
+  const def = SEQUENCES[state.sequenceId];
+  return state.entries.length === 0 && state.startTime === null && !def.finite && !def.bytes;
+}
+
+function skipAhead(n, fade) {
+  const def = SEQUENCES[state.sequenceId];
+  const from = state.seqOffset;
+  let to = Math.min(from + Math.max(0, n | 0), def.digits.length - 1);
+  // In space-separated lists, a skip that ends on a separator skips it too,
+  // so the next character to type is a digit.
+  while (to < def.digits.length - 1 && def.digits[to] === ' ') to++;
+  if (to <= from) return 0;
+  state.seqOffset = to;
+  // The integer part ("3." and so on) counts as typed.
+  state.integerCharsConsumed = state.integerPart.length;
+  state.skipAheadFade = { from, at: performance.now(), fade };
+  syncStateDigits();
+  computeStatuses();
+  render();
+  return to - from;
+}
+
 function skipDigits(n, fade = 'slow') {
   const def = SEQUENCES[state.sequenceId];
   if (def && def.bytes) return skipDoomValues(n);
   if (!canSkip()) return 0;
+  if (canSkipAhead()) return skipAhead(n, fade);
   const fadeStartedAt = performance.now();
   const remaining = state.digits.length - nextPiIdx();
   const count = Math.min(Math.max(0, n | 0), remaining);
@@ -582,6 +628,7 @@ function applySequence(id) {
   if (!def) return;
   derivePiRadix(id);
   state.sequenceId = id;
+  state.seqOffset = 0;
   state.digits = def.digits;
   state.integerPart = def.integerPart;
   state.alphabet = def.alphabet;
@@ -956,6 +1003,9 @@ function clearSession() {
   // doesn't recompute it when there are no entries.
   state.nextSeqIdx = 0;
   state.doomPos = null;
+  state.seqOffset = 0;
+  state.skipAheadFade = null;
+  syncStateDigits();
   state.compTimerHidden = false;
   state.bulletBudget = state.bulletStartSeconds;
   state.bulletGameOver = false;
@@ -1099,8 +1149,8 @@ function listPosition(def) {
       separatorNext: p.tokenLen >= len,
     };
   }
-  const d = state.digits;
-  const idx = Math.min(state.nextSeqIdx || 0, Math.max(0, d.length - 1));
+  const d = def.digits;
+  const idx = Math.min(absoluteNextIdx(), Math.max(0, d.length - 1));
   const starts = termStarts(def);
   if (d[idx] === ' ') {
     const t = termIndexAt(starts, idx - 1);
@@ -1148,8 +1198,8 @@ function updateKeypadHint() {
     keypadHintEl.textContent = listHintText(def, listPosition(def));
     return;
   }
-  const idx = (state.nextSeqIdx || 0) + 1;
-  keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + label + ':';
+  const idx = absoluteNextIdx() + 1;
+  keypadHintEl.textContent = 'Enter digit ' + idx.toLocaleString() + ' of ' + label + ':';
 }
 
 const ordinalRules = new Intl.PluralRules('en', { type: 'ordinal' });
@@ -1162,11 +1212,12 @@ function ordinal(n) {
 // counts digits across the whole list; "Enter the 20th prime, 2nd digit:"
 // counts within one term, used once the typed digits no longer line up.
 function listHintText(def, p) {
-  const ref = def.termRef ? def.termRef(p.term) : 'the ' + ordinal(p.term) + ' ' + def.termName;
+  const ref = def.termRef ? def.termRef(p.term)
+    : 'the ' + ordinal(p.term).replace(/^\d+/, (n) => (+n).toLocaleString()) + ' ' + def.termName;
   if (p.separatorNext) {
     return 'Enter a ' + (def.commaKey ? 'comma' : 'space') + ' after ' + ref + ':';
   }
-  if (p.aligned) return 'Enter digit ' + p.digitOverall + ' (in ' + ref + '):';
+  if (p.aligned) return 'Enter digit ' + p.digitOverall.toLocaleString() + ' (in ' + ref + '):';
   return 'Enter ' + ref + ', ' + ordinal(p.digitInTerm) + ' digit:';
 }
 
@@ -1390,7 +1441,7 @@ function continueInPractice() {
 // A flawless run: every position typed correctly, with nothing skipped,
 // auto-filled as missed, or wrong-then-fixed.
 function isCleanRun() {
-  if (state.entries.length === 0) return false;
+  if (state.entries.length === 0 || state.seqOffset > 0) return false;
   for (const e of state.entries) {
     if (e.status !== 'correct') return false;
     if (e.skipped || e.corrected) return false;
@@ -1626,6 +1677,20 @@ function inputPaste(text) {
 function backspace() {
   if (isInputLocked()) return;
   if (state.mode === 'hardcore') return;
+  // Before the first typed digit, Backspace takes back one skipped digit, as
+  // it would erase a skipped entry (except in sprint, where those stay).
+  if (state.entries.length === 0 && state.seqOffset > 0 && state.startTime === null &&
+      state.mode !== 'sprint') {
+    state.seqOffset -= 1;
+    while (state.seqOffset > 0 &&
+           SEQUENCES[state.sequenceId].digits[state.seqOffset] === ' ') state.seqOffset -= 1;
+    if (state.seqOffset === 0) state.integerCharsConsumed = 0;
+    state.skipAheadFade = null;
+    syncStateDigits();
+    computeStatuses();
+    render();
+    return;
+  }
   if (state.entries.length === 0) return;
   const last = state.entries[state.entries.length - 1];
   if (state.mode === 'sprint') {
@@ -2193,6 +2258,19 @@ let groupElements = [];
 let lastPaddedGroup = null;
 let lastRenderContextKey = '';
 
+// ---- Skip-ahead context ----
+// After a skip ahead (state.seqOffset > 0) the display starts with about
+// SKIP_CONTEXT_DIGITS digits before the new starting point, in the skipped
+// style, with "…" standing in for the first one when earlier digits are
+// hidden. For plain digit strings the first shown position is a multiple of
+// the digits per line, so each digit sits in the column it would if the run
+// had started from digit 1 (the width is re-measured when it changes).
+const SKIP_CONTEXT_DIGITS = 2000;
+// len: display positions the context takes (entries are placed after it);
+// tailNode / tailGroup: its last node and group, which entries continue;
+// lineLength: digits per line it was aligned to (0 if not aligned).
+let skipContext = { len: 0, tailNode: null, tailGroup: null, lineLength: 0 };
+
 // Pad the active (partial) group with invisible NBSP spacers so it reserves
 // the full visual width of a complete group. The cursor is moved inside the
 // active group right after the typed digits so it stays next to the last
@@ -2362,12 +2440,15 @@ function render() {
 
   // Sequence/grouping changes invalidate every entry anyway; full rebuild
   // beats comparing 50k fingerprints in those cases.
-  const ctxKey = state.sequenceId + '|' + gs + '|' + (spaceBoundaries ? '1' : '0');
-  if (lastRenderContextKey !== ctxKey) {
+  const ctxKey = state.sequenceId + '|' + gs + '|' + (spaceBoundaries ? '1' : '0') +
+    '|' + state.seqOffset;
+  const rebuild = lastRenderContextKey !== ctxKey;
+  if (rebuild) {
     renderCache = [];
     groupElements = [];
     userDigitsEl.replaceChildren();
     lastRenderContextKey = ctxKey;
+    skipContext = { len: 0, tailNode: null, tailGroup: null, lineLength: 0 };
   }
 
   const entries = state.entries;
@@ -2447,10 +2528,105 @@ function render() {
     }
   }
 
+  // Lay out the skip-ahead context: digits [start, offset) of the sequence.
+  // Plain digit strings put "…" in place of the digit at start; lists put
+  // "… " before the first whole term shown.
+  function buildSkipContext(start) {
+    const digits = def.digits;
+    const offset = state.seqOffset;
+    const fade = state.skipAheadFade;
+    const fadeLive = fade && performance.now() - fade.at < 800;
+    const cells = [];
+    let pos = 0; // display position within the context
+    let node = null;
+    function place(el, piPos) {
+      insertNode(el, groupIdxFor(piPos));
+      node = el;
+    }
+    function ellipsisCell() {
+      const el = document.createElement('span');
+      el.className = 'digit skip-ellipsis';
+      el.textContent = '0'; // sized like a digit; the "…" is drawn over it
+      el.title = 'Digits 1 to ' + start.toLocaleString() + ' are not shown';
+      return el;
+    }
+    let p = start;
+    if (start > 0 && def.naturalSpaces) {
+      const el = ellipsisCell();
+      place(el, pos++);
+      const sp = document.createElement('span');
+      sp.className = 'prime-space';
+      sp.textContent = ' ';
+      place(sp, pos - 1);
+    } else if (start > 0) {
+      const el = ellipsisCell();
+      cells.push(el);
+      place(el, pos++);
+      p++;
+    }
+    for (; p < offset; p++) {
+      const el = document.createElement('span');
+      el.className = 'digit correct skipped';
+      setCharText(el, digits[p]);
+      el.title = 'skipped';
+      if (fadeLive && p >= fade.from) applyDigitFade(el, { fadeIn: fade.fade, fadeStartedAt: fade.at });
+      cells.push(el);
+      place(el, pos);
+      if (spaceBoundaries && spaceBoundaries.has(p + 1)) {
+        const sp = document.createElement('span');
+        sp.className = 'prime-space';
+        sp.textContent = ' ';
+        place(sp, pos);
+      }
+      pos++;
+    }
+    return { len: pos, tailNode: node, tailGroup: node ? groupIdxFor(pos - 1) : null, cells };
+  }
+
+  // Digits per line, read from where the context's cells wrap (0 if they
+  // don't wrap, or the layout isn't available).
+  function measureLineLength(cells) {
+    if (cells.length < 2) return 0;
+    const top = cells[0].getBoundingClientRect().top;
+    for (let i = 1; i < cells.length; i++) {
+      if (cells[i].getBoundingClientRect().top > top + 2) return i >= 4 ? i : 0;
+    }
+    return 0;
+  }
+
+  if (rebuild && state.seqOffset > 0) {
+    const offset = state.seqOffset;
+    let start = Math.max(0, offset - SKIP_CONTEXT_DIGITS);
+    if (def.naturalSpaces) {
+      // Start at a whole term.
+      while (start > 0 && start < offset && def.digits[start - 1] !== ' ' &&
+             !(spaceBoundaries && spaceBoundaries.has(start))) start++;
+      skipContext = buildSkipContext(start);
+    } else {
+      // Start at a multiple of the line length, using the last measurement
+      // (or the group size) for a first try, then measure and redo if needed.
+      const unit = skipContext.lineLength || gs || 1;
+      start = Math.floor(start / unit) * unit;
+      let built = buildSkipContext(start);
+      const lineLength = start > 0 ? measureLineLength(built.cells) : 0;
+      const aligned = lineLength ? Math.max(0, Math.floor((offset - SKIP_CONTEXT_DIGITS) / lineLength) * lineLength) : start;
+      if (aligned !== start) {
+        userDigitsEl.replaceChildren();
+        groupElements = [];
+        lastNodeInGroup.clear();
+        built = buildSkipContext(aligned);
+      }
+      skipContext = built;
+      skipContext.lineLength = lineLength;
+    }
+  }
+  if (skipContext.tailNode) lastNodeInGroup.set(skipContext.tailGroup, skipContext.tailNode);
+  displayedPi = skipContext.len;
+
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     const seqAfter = (e.seqIdxAfter != null) ? e.seqIdxAfter : seqPos + 1;
-    const hasSpaceAfter = !!(spaceBoundaries && spaceBoundaries.has(seqAfter));
+    const hasSpaceAfter = !!(spaceBoundaries && spaceBoundaries.has(state.seqOffset + seqAfter));
     const visibleMissed = e.checked ? e.missedBefore.length : 0;
     const entryStartPi = displayedPi;
     const mainPi = entryStartPi + visibleMissed;
@@ -2512,9 +2688,26 @@ function render() {
     piDisplayEl.scrollTop = piDisplayEl.scrollHeight;
   });
 
+  // Digits skipped ahead before the start count as skipped too.
+  skipped += state.seqOffset;
   updateStatTiles({ correct, wrong, missed, skipped, fixed });
 
   updateUI();
+}
+
+// Re-align the skip-ahead context when the display's width changes.
+{
+  const piBodyEl = userDigitsEl.parentNode;
+  let lastWidth = piBodyEl.clientWidth;
+  new ResizeObserver(() => {
+    const width = piBodyEl.clientWidth;
+    if (width === lastWidth) return;
+    lastWidth = width;
+    if (state.seqOffset > 0) {
+      lastRenderContextKey = '';
+      render();
+    }
+  }).observe(piBodyEl);
 }
 
 // Tally the scored buckets from checked entries. Shared by the incremental
@@ -3373,10 +3566,17 @@ function closeSkipModal() {
   skipModal.setAttribute('aria-hidden', 'true');
 }
 
-// Keeps the confirm button's "Skip N" label in sync with the number input.
+// Keeps the confirm button's "Skip N" label, and the line saying where the
+// skip lands, in sync with the number input.
 function syncSkipConfirmLabel() {
   const v = parseInt(skipCountInput.value, 10);
   if (skipConfirmCountEl) skipConfirmCountEl.textContent = (!isNaN(v) && v > 0) ? String(v) : '';
+  const def = SEQUENCES[state.sequenceId];
+  skipResultEl.hidden = !!def.bytes || isNaN(v) || v < 1;
+  if (skipResultEl.hidden) return;
+  const total = def.digits.length;
+  const landing = Math.min(absoluteNextIdx() + v + 1, total);
+  skipResultEl.textContent = 'After skipping: digit ' + landing.toLocaleString() + ' of ' + total.toLocaleString();
 }
 
 function confirmSkipN() {
@@ -3458,7 +3658,7 @@ function openBulletScoreModal() {
     }
     if (e.bulletRefunded) refunded += 1;
   }
-  const pos = state.nextSeqIdx || 0;
+  const pos = absoluteNextIdx();
   const seqLabel = (SEQUENCES[state.sequenceId] && SEQUENCES[state.sequenceId].shortLabel) || state.sequenceId;
   let headline;
   if (state.bulletGameOver) {
@@ -3540,7 +3740,7 @@ function loadLong(id) {
         const isActive = active === id ||
           (id === 'pi' && (active === 'tau' || !!SEQUENCES[active].radix));
         if (isActive) {
-          state.digits = SEQUENCES[active].digits;
+          syncStateDigits();
           computeStatuses();
           render();
           updateSequenceDigitsHint();

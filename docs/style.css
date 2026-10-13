@@ -770,6 +770,17 @@ input[type="range"]:disabled {
 .digit.space-char {
   min-width: 0.45em;
 }
+/* "…" before the digits shown after skipping ahead. The cell holds a
+   transparent digit so it is exactly one digit wide, keeping columns aligned. */
+.digit.skip-ellipsis { position: relative; color: transparent; }
+.digit.skip-ellipsis::before {
+  content: "\2026";
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  color: var(--muted);
+}
+
 /* Lists written with commas ([3; 7, 15, 1, …]) show each typed separator as
    a comma followed by the space. */
 .pi-display.comma-list .digit.space-char::before {
@@ -1219,6 +1230,9 @@ html.code-seq #allow-manual-setting {
   align-items: center;
   margin-bottom: 0.7rem;
 }
+
+.skip-result { display: block; margin: -0.3rem 0 0.7rem; }
+.skip-result[hidden] { display: none; }
 
 .skip-inline-label {
   font-size: 0.9rem;
