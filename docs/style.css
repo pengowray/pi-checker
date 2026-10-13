@@ -251,10 +251,11 @@ main {
 /* Skipping closed after the run started; the count stays, with a lock. */
 #stat-skipped-tile.skip-closed { cursor: default; }
 #stat-skipped-tile.skip-closed:hover { background: var(--surface); border-color: var(--border); }
-#stat-skipped-tile.skip-closed .stat-label::before {
+#stat-skipped-tile.skip-closed .stat-value::before {
   content: "\1F512\FE0E";
-  margin-right: 0.25em;
-  font-size: 0.9em;
+  margin-right: 0.2em;
+  font-size: 0.7em;
+  vertical-align: 0.15em;
 }
 
 .toast {
@@ -262,6 +263,7 @@ main {
   left: 50%;
   bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
   transform: translate(-50%, 6px);
+  width: max-content;
   max-width: calc(100vw - 2rem);
   padding: 0.6rem 0.9rem;
   border-radius: 8px;
