@@ -229,6 +229,10 @@ const SEQUENCES = {
     label: 'Primes',
     shortLabel: 'primes',
     hintLabel: 'the list of primes',
+    // The keypad hint names the term being entered ("the 20th prime"); the
+    // given 2 is the 1st prime, so the first one typed is the 2nd.
+    firstTerm: 2,
+    termName: 'prime',
     titleHtml: 'Primes',
     integerPart: '2',
     // "2 " (NBSP) so the trailing space renders reliably across browsers
@@ -257,12 +261,15 @@ const SEQUENCES = {
     digits: '',
     naturalSpaces: true,
     commaIsSpace: true,
+    firstTerm: 2,
+    termName: 'prime',
   },
   // cr(Kₙ) for n = 1, 2, 3, …: the fewest crossings in a plane drawing of
   // the complete graph on n points (OEIS A000241). Hill's formula, proved for
   // every n in a 2026 OpenAI preprint with a Lean proof; before that only
-  // n <= 14 was proven (n = 13, 14 by Aichholzer, 2021). Typed like primes:
-  // spaces between terms auto-insert.
+  // n <= 14 was proven (n = 13, 14 by Aichholzer, 2021). Typed like
+  // primes-spaced: the user types the space (or comma) between terms, since
+  // the run of zeros at the start makes auto-inserted spaces confusing.
   'crossing-numbers': {
     label: 'Crossing numbers of complete graphs',
     shortLabel: 'crossing numbers',
@@ -270,11 +277,13 @@ const SEQUENCES = {
     titleHtml: 'Graph Crossing Numbers',
     integerPart: '',
     prefix: '',
-    alphabet: '0123456789',
+    alphabet: '0123456789 ,',
     keypadType: 'decimal',
     digits: '',          // filled by setupCrossingNumbers()
-    spaceBoundaries: null,
     naturalSpaces: true,
+    commaIsSpace: true,
+    firstTerm: 1,
+    termName: 'crossing number',
     digitsNote: 'Term n is the fewest crossings in any drawing of n points with every pair joined by a curve.',
   },
   champernowne: {
@@ -355,7 +364,9 @@ const SEQUENCES = {
     label: 'DOOM rndtable',
     shortLabel: 'DOOM rndtable',
     hintLabel: 'DOOM’s M_Random rndtable',
-    hintUnit: 'value',
+    // The keypad hint names values C-style: rndtable[0] is the first.
+    firstTerm: 0,
+    termRef: (i) => 'rndtable[' + i + ']',
     titleHtml: 'DOOM rndtable',
     integerPart: '',
     // The given C declaration line, shown as a syntax-coloured header above
@@ -382,6 +393,52 @@ const SEQUENCES = {
     modeLabels: { practice: 'Hey, not too rough', hardcore: 'Nightmare' },
   },
 };
+
+// ---- π in other bases ----
+// Bases 3 to 15 except 10 (binary, decimal and hex have their own entries).
+// Their digits are converted in the browser from the decimal digits of π
+// (derivePiBase), so they grow when long/pi.js loads. The ids pi-base3 …
+// pi-base15 stay out of the dropdown, which has a single "another base" entry
+// plus a base picker (see script.js).
+const PI_BASES = [3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15];
+// Decimal digits used for the conversion: enough for 17,000 to 42,000 digits
+// in these bases, while the BigInt work stays fast in every browser.
+const PI_BASE_SOURCE_DIGITS = 20000;
+for (const b of PI_BASES) {
+  SEQUENCES['pi-base' + b] = {
+    label: 'π in base ' + b,
+    shortLabel: 'π in base ' + b,
+    hintLabel: 'pi in base ' + b,
+    titleHtml: '&pi; in base ' + b,
+    integerPart: (3).toString(b),
+    alphabet: '0123456789ABCDEF'.slice(0, b),
+    keypadType: b <= 10 ? 'decimal' : 'hex', // unused keys greyed out
+    digits: '',
+    hidden: true,
+    piBase: b,
+  };
+}
+
+// The digits of π after the point in base b. n decimal digits pin π down to
+// within 10^-n, which fixes about n·log(10)/log(b) base-b digits; the last 8
+// of those are dropped as a margin against rounding.
+function piDigitsInBase(b) {
+  const dec = SEQUENCES.pi.digits.slice(0, PI_BASE_SOURCE_DIGITS);
+  const n = dec.length;
+  const count = Math.floor(n * Math.LN10 / Math.log(b)) - 8;
+  const scaled = BigInt(dec) * BigInt(b) ** BigInt(count) / 10n ** BigInt(n);
+  return scaled.toString(b).toUpperCase().padStart(count, '0');
+}
+
+// Fill in (or refresh, after more pi digits load) a pi-base sequence's digits.
+function derivePiBase(id) {
+  const def = SEQUENCES[id];
+  if (!def || !def.piBase) return;
+  const sourceLen = Math.min(SEQUENCES.pi.digits.length, PI_BASE_SOURCE_DIGITS);
+  if (def.sourceLen === sourceLen) return;
+  def.digits = piDigitsInBase(def.piBase);
+  def.sourceLen = sourceLen;
+}
 
 // Short fallback digits from sequences.js, shown until docs/long/<id>.js loads.
 for (const [id, data] of Object.entries(window.SEQUENCE_DATA || {})) {
@@ -441,14 +498,11 @@ deriveTau();
   // Hill's formula, cr(Kₙ) = ¼⌊n/2⌋⌊(n−1)/2⌋⌊(n−2)/2⌋⌊(n−3)/2⌋. Exact in
   // doubles: at n = 2000 the product is about 1e12.
   const half = (k) => Math.floor(k / 2);
-  const boundaries = new Set();
-  let joined = '';
+  const terms = [];
   for (let n = 1; n <= 2000; n++) {
-    joined += String(half(n) * half(n - 1) * half(n - 2) * half(n - 3) / 4);
-    boundaries.add(joined.length);
+    terms.push(half(n) * half(n - 1) * half(n - 2) * half(n - 3) / 4);
   }
-  SEQUENCES['crossing-numbers'].digits = joined;
-  SEQUENCES['crossing-numbers'].spaceBoundaries = boundaries;
+  SEQUENCES['crossing-numbers'].digits = terms.join(' ');
 })();
 
 (function setupChampernowne() {
@@ -495,4 +549,9 @@ deriveTau();
   // the decimal join, kept for the settings digit-count hint.
   SEQUENCES.doom.bytes = rnd;
   SEQUENCES.doom.digits = rnd.join(' ');
+  // Digits before each value, counting each value's decimal form, for the
+  // keypad hint's position in the whole table.
+  const digitsBefore = [0];
+  for (const v of rnd) digitsBefore.push(digitsBefore[digitsBefore.length - 1] + String(v).length);
+  SEQUENCES.doom.digitsBefore = digitsBefore;
 })();

@@ -53,7 +53,7 @@ test('sequence dropdown lists every supported sequence', async ({ page }) => {
     'pi', 'tau', 'pi-squared', 'zeta2', 'zeta3', 'zeta5', 'phi', 'tribonacci', 'e',
     'euler-mascheroni', 'catalan',
     'ln2', 'log10_2', 'sqrt2', 'sqrt3', 'sqrt5',
-    'pi-binary', 'pi-hex', 'primes', 'primes-spaced', 'crossing-numbers', 'champernowne',
+    'pi-binary', 'pi-hex', 'pi-base', 'primes', 'primes-spaced', 'crossing-numbers', 'champernowne',
     'less-than-3', 'moss', 'doom',
   ]);
 });
@@ -118,15 +118,21 @@ test('emergency number: a final "3" after a slip still ends the run', async ({ p
   await expect(page.locator('#keypad-decimal .key[data-digit="5"]')).toBeDisabled();
 });
 
-test('crossing numbers: no prefix, terms typed in order with auto-spaces', async ({ page }) => {
+test('crossing numbers: no prefix, terms typed with spaces or commas between', async ({ page }) => {
   await setSequence(page, 'crossing-numbers');
   await expect(page.locator('#prefix')).toBeHidden();
-  // 0 0 0 0 1 3 9 18 36 60 → 13 digits, a space after each completed term.
-  await page.keyboard.type('0000139183660');
+  await expect(page.locator('.key-space')).toBeVisible();
+  // 0 0 0 0 1 3 9 18 36 60 → 13 digits and 9 typed separators, like
+  // primes-spaced (a comma is recorded as a space).
+  await page.keyboard.type('0 0 0,0 1 3 9 18 36 60');
   await page.keyboard.press('Enter');
-  await expect(page.locator('#stat-correct')).toHaveText('13');
+  await expect(page.locator('#stat-correct')).toHaveText('22');
   await expect(page.locator('#stat-wrong')).toHaveText('—');
-  await expect(page.locator('#user-digits .prime-space')).toHaveCount(10);
+  // Without the spaces, the second 0 lands where a space belongs.
+  await page.locator('#reset-btn').click();
+  await page.keyboard.type('00');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-wrong')).toHaveText('1');
 });
 
 // Flint Hills is hidden from the dropdown for now (hidden: true in SEQUENCES).
@@ -575,9 +581,7 @@ test('keypad hint uses a verbose label per sequence', async ({ page }) => {
   await setSequence(page, 'pi-hex');
   await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of pi in hexadecimal:');
   await setSequence(page, 'primes-spaced');
-  await expect(page.locator('#keypad-hint')).toHaveText(
-    'Enter digit 1 of the list of primes, including spaces:'
-  );
+  await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 (in the 2nd prime):');
   await setSequence(page, 'sqrt2');
   await expect(page.locator('#keypad-hint')).toHaveText('Enter digit 1 of the square root of 2:');
   // After typing a few digits the position counter advances too.
@@ -1162,4 +1166,85 @@ test('manual checking off: Enter does not reveal pending digits', async ({ page 
   await page.keyboard.press('Enter');
   const cls = await page.locator('#user-digits .digit').first().getAttribute('class');
   expect(cls).toMatch(/\bpending\b/);
+});
+
+test('π in another base: picker, URL hash and greyed keys', async ({ page }) => {
+  await page.locator('#settings-toggle').click();
+  await expect(page.locator('#pi-base-setting')).toBeHidden();
+  await page.locator('#sequence').selectOption('pi-base');
+  await expect(page.locator('#pi-base-setting')).toBeVisible();
+  await expect(page).toHaveURL(/#pi-base3$/);
+  // π = 10.0102110122… in base 3; the "10" is absorbed by the prefix.
+  await expect(page.locator('#prefix')).toHaveText('10.');
+  await page.locator('#pi-base').selectOption('pi-base7');
+  await expect(page).toHaveURL(/#pi-base7$/);
+  await page.locator('#settings-close').click();
+  await expect(page.locator('#prefix')).toHaveText('3.');
+  await expect(page.locator('#keypad-decimal .key[data-digit="6"]')).toBeEnabled();
+  await expect(page.locator('#keypad-decimal .key[data-digit="7"]')).toBeDisabled();
+  // π = 3.0663651432036134110263402244… in base 7.
+  await page.keyboard.type('30663651432036134110263402244');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#stat-correct')).toHaveText('28');
+  await expect(page.locator('#stat-wrong')).toHaveText('—');
+});
+
+test('π in another base opens from the URL, and base 16 goes to π in hex', async ({ page }) => {
+  await page.goto('/#pi-base12');
+  await expect(page.locator('#keypad-hex')).toBeVisible();
+  await expect(page.locator('#keypad-hex .key[data-digit="B"]')).toBeEnabled();
+  await expect(page.locator('#keypad-hex .key[data-digit="C"]')).toBeDisabled();
+  await expect(page.locator('#sequence')).toHaveValue('pi-base');
+  await expect(page.locator('#pi-base')).toHaveValue('pi-base12');
+  await page.goto('/#pi-base16');
+  await expect(page.locator('#sequence')).toHaveValue('pi-hex');
+});
+
+test('π in another base gets more digits once the long π loads', async ({ page }) => {
+  await page.goto('/#pi-base3');
+  await expect.poll(() => page.evaluate(() => state.digits.length)).toBeGreaterThan(40000);
+  // Spot-check against the stored hex digits: the same conversion in base 16.
+  const ok = await page.evaluate(() => {
+    const hex = piDigitsInBase(16);
+    return hex.length > 16000 && hex.startsWith('243F6A8885A308D313198A2E03707344');
+  });
+  expect(ok).toBe(true);
+});
+
+test('list hints: digit of the whole list, then digit of the term once lengths differ', async ({ page }) => {
+  const hint = page.locator('#keypad-hint');
+  await setSequence(page, 'crossing-numbers');
+  await expect(hint).toHaveText('Enter digit 1 (in the 1st crossing number):');
+  // 0 0 0 0 1 3 9 18 → the 8th term is 18.
+  await page.keyboard.type('0 0 0 0 1 3 9 1');
+  await expect(hint).toHaveText('Enter digit 9 (in the 8th crossing number):');
+  await page.keyboard.type('8');
+  await expect(hint).toHaveText('Enter a space after the 8th crossing number:');
+  // A term typed with an extra digit (366 for 36) breaks the line-up.
+  await page.keyboard.type(' 366');
+  await expect(hint).toHaveText('Enter the 10th crossing number, 1st digit:');
+
+  page.once('dialog', d => d.accept());
+  await setSequence(page, 'primes');
+  // Primes auto-insert spaces: 3 5 7 11 → the next digit is the 2nd of 11.
+  await page.keyboard.type('3571');
+  await expect(hint).toHaveText('Enter digit 5 (in the 5th prime):');
+});
+
+test('doom hint: C-style value names, and digit of value after octal', async ({ page }) => {
+  const hint = page.locator('#keypad-hint');
+  await setSequence(page, 'doom');
+  await expect(hint).toHaveText('Enter digit 1 (in rndtable[0]):');
+  await page.keyboard.type('0');
+  await expect(hint).toHaveText('Enter a comma after rndtable[0]:');
+  // 0, 8, 109 → digits 1, 2, then 3–5.
+  await page.keyboard.type(',8,10');
+  await expect(hint).toHaveText('Enter digit 5 (in rndtable[2]):');
+  await page.keyboard.type('9,');
+  await expect(hint).toHaveText('Enter digit 6 (in rndtable[3]):');
+  // 220 typed in octal (0334): digit counts no longer line up.
+  await page.keyboard.type('0334,');
+  await expect(hint).toHaveText('Enter rndtable[4], 1st digit:');
+  await page.keyboard.type('22');
+  await expect(hint).toHaveText('Enter rndtable[4], 3rd digit:');
 });

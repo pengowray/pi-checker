@@ -162,8 +162,23 @@ const prefixEl = document.getElementById('prefix');
 const appTitleEl = document.getElementById('app-title');
 const sequenceSelect = document.getElementById('sequence');
 // The dropdown lists the sequences in SEQUENCES order, except hidden ones.
+// The pi-base sequences share one entry, after π in hex, plus a base picker.
+const PI_BASE_OPTION = 'pi-base';
 for (const [id, def] of Object.entries(SEQUENCES)) {
   if (!def.hidden) sequenceSelect.add(new Option(def.label, id));
+  if (id === 'pi-hex') sequenceSelect.add(new Option('π in another base…', PI_BASE_OPTION));
+}
+const piBaseSetting = document.getElementById('pi-base-setting');
+const piBaseSelect = document.getElementById('pi-base');
+const PI_BASE_NAMES = { 3: 'ternary', 8: 'octal', 12: 'duodecimal' };
+for (const b of PI_BASES) {
+  const text = PI_BASE_NAMES[b] ? b + ' (' + PI_BASE_NAMES[b] + ')' : String(b);
+  piBaseSelect.add(new Option(text, 'pi-base' + b));
+}
+
+// The dropdown value that shows a sequence (the shared entry for pi-base).
+function dropdownValueFor(id) {
+  return SEQUENCES[id] && SEQUENCES[id].piBase ? PI_BASE_OPTION : id;
 }
 const sequenceDigitsHintEl = document.getElementById('sequence-digits-hint');
 const autoSecondsInput = document.getElementById('auto-seconds');
@@ -455,8 +470,13 @@ function canSkip() {
 }
 
 // Shown when the Skipped tile or the V key is used after skipping has closed.
-const SKIP_CLOSED_TEXT = 'Turn on Practice to skip digits after you start.';
-const SKIP_OPEN_TITLE = 'Click to skip digits';
+// Hardcore has the Practice switch on screen; sprint changes mode in Settings.
+function skipClosedText() {
+  return state.mode === 'hardcore'
+    ? 'Can’t skip digits after you start typing. Turn on Practice to skip.'
+    : 'Can’t skip digits after you start typing. Switch to Practice mode to skip.';
+}
+const SKIP_OPEN_TITLE = 'Click to skip digits. Press V to skip one digit.';
 
 // Reveal the next n byte values (DOOM): drop any partial value, then fill each
 // value's decimal form as skipped entries (plus a committing separator). They
@@ -537,7 +557,10 @@ function updateSequenceDigitsHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
   const count = `${def.digits.length.toLocaleString()} digits available`;
-  sequenceDigitsHintEl.textContent = def.digitsNote ? `${count}. ${def.digitsNote}` : count;
+  const note = def.piBase
+    ? `Calculated from the first ${def.sourceLen.toLocaleString()} decimal digits of π.`
+    : def.digitsNote;
+  sequenceDigitsHintEl.textContent = note ? `${count}. ${note}` : count;
 }
 
 // Relabel the Mode chips for the current sequence (DOOM renames practice /
@@ -555,6 +578,7 @@ function applyModeLabels(def) {
 function applySequence(id) {
   const def = SEQUENCES[id];
   if (!def) return;
+  derivePiBase(id);
   state.sequenceId = id;
   state.digits = def.digits;
   state.integerPart = def.integerPart;
@@ -603,7 +627,9 @@ function applySequence(id) {
   // Keep the settings dropdown in sync — browsers restore form values
   // across reloads, so without this the select can show a stale
   // sequence when the app actually re-initialised back to the default.
-  if (sequenceSelect.value !== id) sequenceSelect.value = id;
+  if (sequenceSelect.value !== dropdownValueFor(id)) sequenceSelect.value = dropdownValueFor(id);
+  piBaseSetting.hidden = !def.piBase;
+  if (def.piBase) piBaseSelect.value = id;
   updateSequenceDigitsHint();
   updateMobileInputMode();
   // Fire-and-forget: fetch the long version if we have a source for it.
@@ -619,10 +645,13 @@ function sequenceFromHash() {
   let id = '';
   try { id = decodeURIComponent((location.hash || '').replace(/^#/, '')).trim(); }
   catch (e) { id = (location.hash || '').replace(/^#/, '').trim(); }
-  // Only sequences listed in the dropdown, so a hidden one can't be opened by
-  // URL with a blank dropdown.
+  // π in base 2, 10 and 16 have their own entries.
+  const sameAs = { 'pi-base2': 'pi-binary', 'pi-base10': 'pi', 'pi-base16': 'pi-hex' };
+  if (sameAs[id]) return sameAs[id];
+  // Only sequences listed in the dropdown (or picked with the base picker), so
+  // a hidden one can't be opened by URL with a blank dropdown.
   const listed = Array.from(sequenceSelect.options).some(o => o.value === id);
-  return SEQUENCES[id] && listed ? id : null;
+  return SEQUENCES[id] && (listed || SEQUENCES[id].piBase) ? id : null;
 }
 
 function updateSequenceHash(id) {
@@ -645,7 +674,8 @@ function changeSequence(newId, { fromHash = false } = {}) {
     const ok = confirm('Switching sequence will reset your current progress. Continue?');
     if (!ok) {
       // Put the control that triggered this back to the current sequence.
-      sequenceSelect.value = state.sequenceId;
+      sequenceSelect.value = dropdownValueFor(state.sequenceId);
+      if (SEQUENCES[state.sequenceId].piBase) piBaseSelect.value = state.sequenceId;
       if (fromHash) updateSequenceHash(state.sequenceId);
       return false;
     }
@@ -659,7 +689,13 @@ function changeSequence(newId, { fromHash = false } = {}) {
 }
 
 sequenceSelect.addEventListener('change', () => {
-  changeSequence(sequenceSelect.value);
+  // The "another base" entry opens the base last shown in the picker.
+  const id = sequenceSelect.value === PI_BASE_OPTION ? piBaseSelect.value : sequenceSelect.value;
+  changeSequence(id);
+});
+
+piBaseSelect.addEventListener('change', () => {
+  changeSequence(piBaseSelect.value);
 });
 
 // React to the hash being changed externally (a shared link opened in an
@@ -1006,6 +1042,91 @@ function updateModeBadge() {
   modeBadge.classList.toggle('locked', state.gameLocked && !state.sprintEnded);
 }
 
+// ---- Term positions in lists ----
+// Sequences that are lists of numbers (def.firstTerm set: primes, crossing
+// numbers, DOOM's rndtable) report where the next typed digit goes:
+//   term          which number in the list (counting from def.firstTerm)
+//   digitInTerm   which digit of that number (1-based)
+//   digitOverall  which digit of the whole list, counting digits only
+//   aligned       false once what the user typed stops lining up digit for
+//                 digit with the list (a number typed with too many or too
+//                 few digits, or DOOM's octal), so digitOverall would mislead
+//   separatorNext the number is complete and a space or comma comes next
+
+// Start index of each term in a space-separated digits string, or for the
+// auto-spaced primes, from its spaceBoundaries. Cached on the definition.
+function termStarts(def) {
+  if (def._termStarts && def._termStartsFor === def.digits) return def._termStarts;
+  const starts = [0];
+  if (def.spaceBoundaries) {
+    for (const b of def.spaceBoundaries) starts.push(b);
+  } else {
+    const d = def.digits;
+    for (let i = 0; i < d.length; i++) if (d[i] === ' ') starts.push(i + 1);
+  }
+  def._termStarts = starts;
+  def._termStartsFor = def.digits;
+  return starts;
+}
+
+// Index of the last term start that is <= idx.
+function termIndexAt(starts, idx) {
+  let lo = 0, hi = starts.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (starts[mid] <= idx) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+
+function listPosition(def) {
+  if (def.bytes) {
+    const p = state.doomPos || { valueIdx: 0, tokenLen: 0, aligned: true };
+    const valueIdx = Math.min(p.valueIdx, def.bytes.length - 1);
+    const len = String(def.bytes[valueIdx]).length;
+    return {
+      term: valueIdx + def.firstTerm,
+      digitInTerm: p.tokenLen + 1,
+      digitOverall: def.digitsBefore[valueIdx] + p.tokenLen + 1,
+      aligned: p.aligned && p.tokenLen <= len,
+      separatorNext: p.tokenLen >= len,
+    };
+  }
+  const d = state.digits;
+  const idx = Math.min(state.nextSeqIdx || 0, Math.max(0, d.length - 1));
+  const starts = termStarts(def);
+  if (d[idx] === ' ') {
+    const t = termIndexAt(starts, idx - 1);
+    return {
+      term: t + def.firstTerm,
+      digitInTerm: idx - starts[t] + 1,
+      digitOverall: idx - t + 1,
+      aligned: listEntriesAligned(),
+      separatorNext: true,
+    };
+  }
+  const t = termIndexAt(starts, idx);
+  // In a space-separated string, each term before this one adds one space.
+  const spacesBefore = def.spaceBoundaries ? 0 : t;
+  return {
+    term: t + def.firstTerm,
+    digitInTerm: idx - starts[t] + 1,
+    digitOverall: idx - spacesBefore + 1,
+    aligned: def.spaceBoundaries ? true : listEntriesAligned(),
+    separatorNext: false,
+  };
+}
+
+// True while every typed space landed where the list has a space, and every
+// typed digit where it has a digit.
+function listEntriesAligned() {
+  for (const e of state.entries) {
+    if (e.expected == null) continue;
+    if ((e.char === ' ') !== (e.expected === ' ')) return false;
+  }
+  return true;
+}
+
 function updateKeypadHint() {
   const def = SEQUENCES[state.sequenceId];
   if (!def) return;
@@ -1015,9 +1136,31 @@ function updateKeypadHint() {
       : 'Finished — not a perfect run.';
     return;
   }
+  const label = def.hintLabel || def.shortLabel || def.label;
+  if (def.firstTerm != null) {
+    keypadHintEl.textContent = listHintText(def, listPosition(def));
+    return;
+  }
   const idx = (state.nextSeqIdx || 0) + 1;
-  const unit = def.hintUnit || 'digit';
-  keypadHintEl.textContent = 'Enter ' + unit + ' ' + idx + ' of ' + (def.hintLabel || def.shortLabel || def.label) + ':';
+  keypadHintEl.textContent = 'Enter digit ' + idx + ' of ' + label + ':';
+}
+
+const ordinalRules = new Intl.PluralRules('en', { type: 'ordinal' });
+const ORDINAL_SUFFIX = { one: 'st', two: 'nd', few: 'rd', other: 'th' };
+function ordinal(n) {
+  return n + ORDINAL_SUFFIX[ordinalRules.select(n)];
+}
+
+// The two shapes are kept distinct: "Enter digit 57 (in the 20th prime):"
+// counts digits across the whole list; "Enter the 20th prime, 2nd digit:"
+// counts within one term, used once the typed digits no longer line up.
+function listHintText(def, p) {
+  const ref = def.termRef ? def.termRef(p.term) : 'the ' + ordinal(p.term) + ' ' + def.termName;
+  if (p.separatorNext) {
+    return 'Enter a ' + (def.commaKey ? 'comma' : 'space') + ' after ' + ref + ':';
+  }
+  if (p.aligned) return 'Enter digit ' + p.digitOverall + ' (in ' + ref + '):';
+  return 'Enter ' + ref + ', ' + ordinal(p.digitInTerm) + ' digit:';
 }
 
 function updateModeHint() {
@@ -1793,6 +1936,9 @@ function computeByteStatuses(def) {
   let token = '';        // chars accumulated for the current value
   let tokenEntries = [];
   let correctValues = 0, wrongValues = 0, fixedValues = 0, skippedValues = 0, missedValues = 0;
+  // False once a committed value was typed with a different number of digits
+  // than its decimal form (octal, or a wrong length); see listPosition.
+  let digitsAligned = true;
   state.doomFinalComplete = false;
 
   function repsFor(idx) {
@@ -1865,6 +2011,9 @@ function computeByteStatuses(def) {
       // Separator commits the current value to its final colour and score.
       if (tokenEntries.length > 0) {
         const target = resolveValue();
+        if (target < bytes.length && token.length !== String(bytes[target]).length) {
+          digitsAligned = false;
+        }
         tokenEntries[tokenEntries.length - 1].valueEnd = true;
         byteIdx = target + 1; // skip past a missed byte if one was inserted
         token = '';
@@ -1896,6 +2045,7 @@ function computeByteStatuses(def) {
   };
   // The keypad hint counts values (bytes): the value currently being entered.
   state.nextSeqIdx = byteIdx;
+  state.doomPos = { valueIdx: byteIdx, tokenLen: token.length, aligned: digitsAligned };
 }
 
 // ---- Status computation ----
@@ -2385,7 +2535,7 @@ function updateStatTiles(s) {
   skippedTile.classList.toggle('skip-closed', closed && !!s.skipped);
   skippedTile.setAttribute('aria-hidden', String(hidden));
   skippedTile.tabIndex = hidden ? -1 : 0;
-  skippedTile.title = closed ? SKIP_CLOSED_TEXT : SKIP_OPEN_TITLE;
+  skippedTile.title = closed ? skipClosedText() : SKIP_OPEN_TITLE;
   // Doubles as a key for the dotted underline on corrected digits.
   // Hardcore and sprint don't allow the backspace-then-retype path
   // so they'll never have fixed > 0; bullet and practice will.
@@ -2920,7 +3070,7 @@ document.addEventListener('keydown', (e) => {
   // "V" skips the next sequence digit. Practice: any time;
   // Sprint/Hardcore: only before the clock starts.
   if (e.key === 'v' || e.key === 'V') {
-    if (skipClosedForRun()) showToast(SKIP_CLOSED_TEXT);
+    if (skipClosedForRun()) showToast(skipClosedText());
     else skipNextDigit();
     e.preventDefault();
     return;
@@ -3192,7 +3342,7 @@ function showToast(text, ms = 3500) {
 // ---- Skip-digits modal ----
 function openSkipModal() {
   if (!canSkip()) {
-    if (skipClosedForRun()) showToast(SKIP_CLOSED_TEXT);
+    if (skipClosedForRun()) showToast(skipClosedText());
     return;
   }
   skipCountInput.value = lastSkipAmount;
@@ -3352,8 +3502,8 @@ if (correctTile) {
 const longLoadPromises = new Map();
 
 function loadLong(id) {
-  // Tau is derived from pi; loading pi covers both.
-  if (id === 'tau') id = 'pi';
+  // Tau and π in other bases are derived from pi; loading pi covers them.
+  if (id === 'tau' || (SEQUENCES[id] && SEQUENCES[id].piBase)) id = 'pi';
   if (!SEQUENCES[id] || !SEQUENCES[id].long) return Promise.resolve(false);
   if (longLoadPromises.has(id)) return longLoadPromises.get(id);
   const p = new Promise((resolve) => {
@@ -3370,7 +3520,9 @@ function loadLong(id) {
         // loaded), swap in the longer string and re-score any entries
         // beyond the short fallback.
         const active = state.sequenceId;
-        const isActive = active === id || (id === 'pi' && active === 'tau');
+        if (id === 'pi') derivePiBase(active);
+        const isActive = active === id ||
+          (id === 'pi' && (active === 'tau' || !!SEQUENCES[active].piBase));
         if (isActive) {
           state.digits = SEQUENCES[active].digits;
           computeStatuses();

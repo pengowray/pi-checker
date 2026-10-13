@@ -427,6 +427,17 @@ input[type="range"] {
   max-width: 220px;
 }
 
+/* Base picker under the sequence dropdown (π in another base). */
+.pi-base-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+.pi-base-setting[hidden] { display: none; }
+.pi-base-setting > span { color: var(--muted); font-size: 0.9rem; }
+.pi-base-setting .setting-select { width: auto; }
+
 .setting-action {
   background: var(--accent);
   color: white;
